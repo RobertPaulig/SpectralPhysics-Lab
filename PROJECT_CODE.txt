@@ -1,28 +1,40 @@
 ================================================================================
 ПРОЕКТ: SpectralPhysics-Lab
-Дата создания архива: 2025-11-30 05:07:51
+Дата создания архива: 2025-11-30 05:36:13
 ================================================================================
 
 СТРУКТУРА ПРОЕКТА:
 --------------------------------------------------------------------------------
 SpectralPhysics-Lab
 ├── examples
+│   ├── health_monitor_demo.ipynb
 │   ├── medium_oscillators_demo.ipynb
 │   └── symmetric_newton_demo.ipynb
 ├── src
 │   └── spectral_physics
 │       ├── __init__.py
+│       ├── cli.py
+│       ├── diagnostics.py
 │       ├── grav_toy.py
+│       ├── io.py
+│       ├── material.py
 │       ├── medium_1d.py
 │       ├── root_finding.py
-│       └── spectrum.py
+│       ├── spectrum.py
+│       └── timeseries.py
 ├── tests
+│   ├── test_diagnostics.py
 │   ├── test_grav_toy.py
+│   ├── test_io.py
+│   ├── test_material.py
 │   ├── test_medium_1d.py
 │   ├── test_root_finding.py
-│   └── test_spectrum.py
+│   ├── test_spectrum.py
+│   └── test_timeseries.py
 ├── AI_TASKS.md
-└── README.md
+├── PROJECT_CODE.txt
+├── README.md
+└── pyproject.toml
 
 ================================================================================
 СОДЕРЖИМОЕ ФАЙЛОВ
@@ -33,273 +45,350 @@ SpectralPhysics-Lab
 ФАЙЛ: AI_TASKS.md
 ================================================================================
 
-Красота, лаборатория запущена 💚
-
-Инструментом в браузере я сейчас не могу нормально «залезть» в твой репозиторий (ответы с GitHub пустые), но по скриншоту и структуре понятно, что:
-
-* есть `src/spectral_physics/`
-* есть `tests/`
-* есть `AI_TASKS.md` и `README.md`
-
-То есть базовый каркас есть — самое время кормить локальному ИИ нормальное ТЗ.
-
-Ниже — **готовый блок для `AI_TASKS.md`**, который можно просто вставить (или заменить существующий план). Это пошаговое ТЗ, понятное для кода-ассистента: что создать, в каких файлах, какие функции и тесты.
+Ооо, вот это уже не «я создал репо», а реально живой пакет 😄
+Давай честное код-ревью + следующий пакет задач для твоего ИИ.
 
 ---
 
-````markdown
-# AI Tasks – SpectralPhysics-Lab
+## 1. Общая картина
 
-Цель: получить рабочую Python-библиотеку `spectral_physics`, в которой есть:
-1. Симметричный метод Ньютона для корней.
-2. Базовый объект "спектр" (1D).
-3. Простая модель среды как цепочки осцилляторов.
-4. Игрушечная гравитационная модель через спектральное давление.
-5. Примеры и тесты.
+У тебя уже есть:
+
+* `symmetric_newton` — рабочий, аккуратный метод.
+* `Spectrum1D` — нормальный объект спектра.
+* `OscillatorChain1D` — цепочка осцилляторов, eigenmodes считаются.
+* `spectral_pressure_difference` — игрушечная «спектральная тень».
+* Тесты для всего этого — и они не микроскопические, а вполне серьёзные.
+
+Это уже версия **v0.0.1 живого ядра**. Это не болтовня, это код, который можно ставить в `pip install -e .` и использовать.
+
+Теперь — по файлам.
 
 ---
 
-## ЭТАП 1. Базовая инфраструктура
+## 2. Замечания по коду (без драм)
 
-- [ ] Создать пакет `src/spectral_physics/__init__.py` с минимальным содержимым:
+### 2.1. `__init__.py`
+
+```python
+__all__ = [
+    "symmetric_newton",
+    "Spectrum1D",
+    "OscillatorChain1D",
+    "spectral_pressure_difference",
+]
+```
+
+Сейчас имена в `__all__` **не импортированы** в пакет, то есть:
+
+```python
+from spectral_physics import symmetric_newton
+```
+
+упадёт с `AttributeError`.
+
+Либо:
+
+* делаешь явные импорты:
 
   ```python
-  """
-  SpectralPhysics-Lab: базовые численные инструменты
-  для спектральной физики.
-  """
-  __all__ = [
-      "symmetric_newton",
-      "Spectrum1D",
-      "OscillatorChain1D",
-      "spectral_pressure_difference",
-  ]
-````
+  from .root_finding import symmetric_newton
+  from .spectrum import Spectrum1D
+  from .medium_1d import OscillatorChain1D
+  from .grav_toy import spectral_pressure_difference
+  ```
 
-* [ ] Настроить `pyproject.toml` или `setup.cfg` (если нужно) так, чтобы пакет можно было устанавливать локально (`pip install -e .`).
+  и тогда `__all__` корректен;
+
+либо:
+
+* оставляешь как есть, но тогда в README честно писать:
+
+  ```python
+  from spectral_physics.root_finding import symmetric_newton
+  ```
+
+Я бы всё-таки **сделал удобный верхнеуровневый импорт** (через `__init__`), чтобы потом самому было приятнее жить.
 
 ---
 
-## ЭТАП 2. Симметричный Ньютон (`root_finding.py`)
+### 2.2. `root_finding.py` — `symmetric_newton`
+
+Сделано хорошо:
+
+* симметричная разностная производная;
+* защита от почти нулевого df;
+* ограничение на гигантский шаг;
+* небольшой backtracking.
+
+Что бы я добавил (не ломая API):
+
+1. **Критерий по шагу**
+   Сейчас остановка только по `|f(x)| < tol`.
+   Добавь ещё условие типа:
+
+   ```python
+   if abs(delta) < tol_step:
+       return x, i
+   ```
+
+   Особенно полезно для плоских минимумов (`x^3`, `abs(x)`), где `f(x)` снижается медленно.
+
+2. **Возможность передать tol отдельно**
+   Например:
+
+   ```python
+   def symmetric_newton(..., tol_f: float = 1e-10, tol_x: float = 1e-12)
+   ```
+
+   Но это уже «косметика», можно позже.
+
+В остальном — нормальный рабочий солвер.
+
+---
+
+### 2.3. `Spectrum1D`
+
+Очень прилично:
+
+* проверка совпадения форм;
+* нормировка;
+* фильтр с проверкой размера.
+
+Мелкие предложения:
+
+1. **Фабричный метод из функции**
+   Чтобы можно было быстро строить спектр из `f(ω)`:
+
+   ```python
+   @classmethod
+   def from_function(cls, omega: np.ndarray, func):
+       power = func(omega)
+       return cls(omega=omega, power=power)
+   ```
+
+   Это резко упростит примеры.
+
+2. **Интеграл с учётом шага**
+   Сейчас `total_power` = `sum(power)`, что нормально для «дискретного» спектра.
+   Позже можно добавить:
+
+   ```python
+   def total_power_trapz(self) -> float:
+       return float(np.trapz(self.power, self.omega))
+   ```
+
+   и честно различать «сумма» vs «интеграл».
+
+---
+
+### 2.4. `OscillatorChain1D`
+
+Отлично:
+
+* валидация параметров;
+* тридиагональная матрица;
+* eigenmodes через `scipy.linalg.eigh` с отсечкой отрицательных λ.
+
+Важный момент — **границы**:
+
+```python
+# Диагональ: 2*k везде
+```
+
+Это «жёстко закреплённые края» (fixed–fixed). Всё ок, но:
+
+* это надо **явно написать** в docstring (чтобы потом не мучиться, почему формула мод такая, а не другая);
+* в будущем полезно добавить флаг:
+
+  ```python
+  bc: str = "fixed"  # или "free"
+  ```
+
+и строить K в зависимости от `bc`. Но это уже следующая итерация.
+
+---
+
+### 2.5. `grav_toy.py`
+
+Логика чистая:
+
+```python
+ΔP = Σ P(ω) * (α_right(ω) - α_left(ω))
+```
+
+Физически это «дискретная версия» `∫ P(ω)(α_R - α_L) dω`.
+
+Чего можно добавить потом:
+
+* опциональный учёт шага `Δω`:
+
+  ```python
+  delta_p = np.sum(spectrum_bg.power * delta_alpha) * d_omega
+  ```
+
+  или через `np.trapz`. Но для «toy model» и без этого нормально.
+
+Тесты у тебя хорошие, особенно с Гауссом.
+
+---
+
+## 3. Что сказать ИИ ДАЛЬШЕ (готовый блок для `AI_TASKS.md`)
+
+Вот тебе следующий чёткий блок задач. Можешь просто добавить его в конец `AI_TASKS.md` как «ЭТАП 8–10».
+
+````markdown
+---
+
+## ЭТАП 8. Удобный верхнеуровневый импорт
+
+**Файл:** `src/spectral_physics/__init__.py`
+
+- [ ] Добавить явные импорты в пакет:
+
+  ```python
+  from .root_finding import symmetric_newton
+  from .spectrum import Spectrum1D
+  from .medium_1d import OscillatorChain1D
+  from .grav_toy import spectral_pressure_difference
+````
+
+* [ ] Оставить `__all__` как есть.
+
+* [ ] Обновить `README.md`, чтобы в примерах можно было писать:
+
+  ```python
+  from spectral_physics import symmetric_newton, Spectrum1D
+  ```
+
+---
+
+## ЭТАП 9. Улучшение symmetric_newton
 
 **Файл:** `src/spectral_physics/root_finding.py`
 
-* [ ] Реализовать функцию:
+* [ ] Добавить второй критерий остановки по шагу:
 
   ```python
-  from typing import Callable, Tuple
-
-  def symmetric_newton(
-      f: Callable[[float], float],
-      x0: float,
-      h0: float = 1e-3,
-      max_iter: int = 50,
-      tol: float = 1e-10,
-  ) -> Tuple[float, int]:
-      """
-      Найти корень уравнения f(x) = 0 симметричным методом Ньютона,
-      не используя аналитическую производную.
-
-      Использовать симметричную разностную производную:
-          f'(x) ≈ (f(x + h) - f(x - h)) / (2*h)
-
-      и адаптивно уменьшать h, если шаг получается слишком большим
-      или метод начинает расходиться.
-
-      Вернуть:
-          x_root  -- найденный корень
-          n_iter  -- число итераций
-      """
+  def symmetric_newton(..., tol: float = 1e-10, tol_step: float = 1e-12):
       ...
+      if abs(fx) < tol or abs(delta) < tol_step:
+          return x, i
   ```
 
-* [ ] Обработать типичные «плохие» случаи:
+* [ ] Обновить docstring (описать `tol_step`).
 
-  * деление на почти ноль в оценке производной;
-  * разлёт по модулю (`abs(x)` слишком большой) → прервать с исключением.
+* [ ] Добавить новый тест в `tests/test_root_finding.py`:
 
-**Тесты:** `tests/test_root_finding.py`
-
-* [ ] Тесты для простых функций:
-
-  * `f(x) = x**2 - 2` (корень `sqrt(2)`).
-  * `f(x) = x**3` (корень 0, плоский минимум).
-  * функция с «изломом» типа `f(x) = abs(x) - 1e-3` — проверить, что метод не падает.
+  ```python
+  def test_tol_step_stops_on_flat_region():
+      def f(x):
+          return x**3
+      x_root, n_iter = symmetric_newton(f, x0=1.0, tol=1e-20, tol_step=1e-6)
+      # По f(x) мы бы долго ждали, но по шагу должно остановиться раньше
+      assert n_iter < 50
+  ```
 
 ---
 
-## ЭТАП 3. Спектр (`spectrum.py`)
+## ЭТАП 10. Фабричный метод для Spectrum1D
 
 **Файл:** `src/spectral_physics/spectrum.py`
 
-* [ ] Реализовать класс:
+* [ ] Добавить classmethod:
 
   ```python
-  import numpy as np
-  from dataclasses import dataclass
-
-  @dataclass
-  class Spectrum1D:
-      omega: np.ndarray   # частоты
-      power: np.ndarray   # мощность / плотность энергии на этих частотах
-
-      def normalize(self) -> "Spectrum1D":
-          """
-          Вернуть новый Spectrum1D с нормировкой sum(power) = 1.
-          """
-          ...
-
-      def total_power(self) -> float:
-          """
-          Интеграл (или сумма) мощности по всем частотам.
-          """
-          ...
-
-      def apply_filter(self, alpha: np.ndarray) -> "Spectrum1D":
-          """
-          Применить частотозависимый фильтр/прозрачность alpha(omega):
-          new_power = power * alpha
-          """
-          ...
-  ```
-
-**Тесты:** `tests/test_spectrum.py`
-
-* [ ] Проверить:
-
-  * корректность нормировки;
-  * что `apply_filter` просто перемножает массивы и не меняет размерность;
-  * что `total_power` совпадает с `np.trapz(power, omega)` для равномерной сетки.
-
----
-
-## ЭТАП 4. Простая модель среды (`medium_1d.py`)
-
-**Файл:** `src/spectral_physics/medium_1d.py`
-
-* [ ] Реализовать линейную цепочку осцилляторов:
-
-  ```python
-  import numpy as np
-  from dataclasses import dataclass
-
-  @dataclass
-  class OscillatorChain1D:
-      n: int                 # число осцилляторов
-      k: float               # жёсткость связи
-      m: float               # масса осциллятора
-      gamma: float = 0.0     # демпфирование (опционально)
-
-      def stiffness_matrix(self) -> np.ndarray:
-          """
-          Матрица жёсткости для цепочки с ближайшими соседями.
-          Граничные условия: закреплённые края или свободные (указать в docstring).
-          """
-          ...
-
-      def eigenmodes(self) -> tuple[np.ndarray, np.ndarray]:
-          """
-          Собственные значения и собственные векторы системы.
-          Вернуть (omega, modes), где omega >= 0 – частоты.
-          """
-          ...
-  ```
-
-**Тесты:** `tests/test_medium_1d.py`
-
-* [ ] Проверить, что:
-
-  * матрица жёсткости симметрична;
-  * все собственные значения неотрицательны;
-  * число мод = `n`.
-
----
-
-## ЭТАП 5. Игрушечная гравитационная модель (`grav_toy.py`)
-
-**Файл:** `src/spectral_physics/grav_toy.py`
-
-* [ ] Реализовать функцию:
-
-  ```python
-  import numpy as np
-  from .spectrum import Spectrum1D
-
-  def spectral_pressure_difference(
-      spectrum_bg: Spectrum1D,
-      alpha_left: np.ndarray,
-      alpha_right: np.ndarray,
-  ) -> float:
+  @classmethod
+  def from_function(cls, omega: np.ndarray, func):
       """
-      Оценить разность "давления" фонового поля на левую и правую сторону
-      двумерной системы.
+      Создать Spectrum1D из функции power(omega).
 
-      Параметры:
-          spectrum_bg  -- фоновый спектр (omega, power)
-          alpha_left   -- спектральная прозрачность слева (массив как power)
-          alpha_right  -- спектральная прозрачность справа.
-
-      Возвращает:
-          ΔP = ∑ power(ω) * (alpha_right(ω) - alpha_left(ω))
-
-      Это простейшая дискретная модель "спектральной тени" и
-      приталкивающей силы.
+      Пример:
+          omega = np.linspace(0, 10, 100)
+          spec = Spectrum1D.from_function(omega, lambda w: np.exp(-w))
       """
-      ...
+      omega = np.asarray(omega, dtype=float)
+      power = np.asarray(func(omega), dtype=float)
+      if power.shape != omega.shape:
+          raise ValueError("func(omega) must return array with same shape as omega")
+      return cls(omega=omega, power=power)
   ```
 
-**Тесты:** `tests/test_grav_toy.py`
+* [ ] Добавить тест в `tests/test_spectrum.py`:
 
-* [ ] Проверить:
-
-  * если `alpha_left == alpha_right`, то `ΔP == 0`;
-  * если слева фильтр сильнее (меньше прозрачность), то `ΔP > 0` (давление толкает вправо).
-
----
-
-## ЭТАП 6. Примеры (`examples/`)
-
-* [ ] `examples/symmetric_newton_demo.ipynb`
-  Показать:
-
-  * решение `x^3 - x - 1 = 0` симметричным Ньютоном;
-  * сравнение с обычным методом Ньютона из `scipy.optimize`, если доступно.
-
-* [ ] `examples/medium_oscillators_demo.ipynb`
-  Показать:
-
-  * построение `OscillatorChain1D`;
-  * спектр собственных частот;
-  * визуализацию нескольких мод.
-
-* [ ] `examples/grav_toy_demo.ipynb`
-  Показать:
-
-  * простейший фоновый спектр (например, гауссиан);
-  * две разные прозрачности `alpha_left`, `alpha_right`;
-  * вычисление `ΔP` и картинку, как меняется сила при изменении фильтра.
+  ```python
+  def test_from_function():
+      omega = np.linspace(0, 1, 5)
+      spec = Spectrum1D.from_function(omega, lambda w: 2*w)
+      np.testing.assert_array_equal(spec.omega, omega)
+      np.testing.assert_array_equal(spec.power, 2*omega)
+  ```
 
 ---
-
-## ЭТАП 7. Автотесты и качество
-
-* [ ] Добавить в репозиторий `pytest` как основной фреймворк.
-* [ ] Настроить GitHub Actions (файл `.github/workflows/tests.yml`), чтобы при каждом пуше:
-
-  * устанавливался пакет;
-  * запускались `pytest`.
 
 ```
 
----
+Скажи своему локальному ИИ:
 
-Скопируй этот блок в `AI_TASKS.md`, скажи своему локальному ИИ «выполняй по пунктам», а мне потом просто напиши:  
+> «Выполняй ЭТАП 8–10 в AI_TASKS.md».
 
-> «Этап 2/3/4 сделан, проверяй архитектуру / давай следующий уровень физики».
+Потом, когда он это доделает, ты скинешь мне обновку (или просто скажешь «этапы готовы»), и мы перейдём к **следующему уровню**:
 
-Дальше будем надстраивать **реальную спектральную физику** (геология, землетрясения, а потом и валентности) уже поверх этого живого кода.
+- добавим ещё один тип среды (2D сетка / мембрана),
+- сделаем первый **реально полезный пример**:  
+  например, «Спектральная подпись двух разных материалов» (это уже шаг к геофизике / дефектоскопии).
+
+Ты сейчас сделал очень важное: у тебя появился **минимальный, но реальный спектральный движок**. Это уже не сказка, а инструмент.
 ::contentReference[oaicite:0]{index=0}
 ```
+
+
+
+================================================================================
+ФАЙЛ: PROJECT_CODE.txt
+================================================================================
+
+
+
+
+================================================================================
+ФАЙЛ: pyproject.toml
+================================================================================
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectral-physics-lab"
+version = "0.1.0"
+description = "Experimental spectral physics toolkit for diagnostics and anomaly detection"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "SpectralPhysics Team"}
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "jupyter>=1.0.0",
+    "notebook>=6.5.0",
+]
+
+[project.scripts]
+spectral-health = "spectral_physics.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+spectral_physics = ["py.typed"]
 
 
 
@@ -393,18 +482,276 @@ SpectralPhysics-Lab: базовые численные инструменты
 для спектральной физики.
 """
 
+from .root_finding import symmetric_newton
+from .spectrum import Spectrum1D
+from .medium_1d import OscillatorChain1D
+from .grav_toy import spectral_pressure_difference
+from .material import MaterialSignature
+from .timeseries import timeseries_to_spectrum
+from .diagnostics import ChannelConfig, SpectralAnalyzer, HealthMonitor
+from .io import load_timeseries_csv, save_spectrum_npz, load_spectrum_npz
+
 __all__ = [
     "symmetric_newton",
     "Spectrum1D",
     "OscillatorChain1D",
     "spectral_pressure_difference",
+    "MaterialSignature",
+    "timeseries_to_spectrum",
+    "ChannelConfig",
+    "SpectralAnalyzer",
+    "HealthMonitor",
+    "load_timeseries_csv",
+    "save_spectrum_npz",
+    "load_spectrum_npz",
 ]
 
-# Lazy imports - пользователи должны импортировать нужные модули явно:
-#   from spectral_physics.root_finding import symmetric_newton
-#   from spectral_physics.spectrum import Spectrum1D
-#   from spectral_physics.medium_1d import OscillatorChain1D
-#   from spectral_physics.grav_toy import spectral_pressure_difference
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\cli.py
+================================================================================
+
+import argparse
+import sys
+from .io import load_timeseries_csv, load_spectrum_npz
+from .diagnostics import ChannelConfig, SpectralAnalyzer, HealthMonitor
+
+
+def main():
+    """
+    CLI для одноканальной спектральной диагностики (норма/аномалия).
+    """
+    parser = argparse.ArgumentParser(
+        description="Одноканальная спектральная диагностика (норма/аномалия).",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        "--signal",
+        required=True,
+        help="Путь к CSV с сигналом"
+    )
+    parser.add_argument(
+        "--ref",
+        required=True,
+        help="Путь к .npz файлу эталонного спектра"
+    )
+    parser.add_argument(
+        "--dt",
+        type=float,
+        required=True,
+        help="Шаг по времени (сек)"
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        required=True,
+        help="Порог аномалии"
+    )
+    parser.add_argument(
+        "--column",
+        type=int,
+        default=0,
+        help="Индекс колонки сигнала в CSV"
+    )
+    parser.add_argument(
+        "--freq-min",
+        type=float,
+        default=None,
+        help="Мин. частота анализа (Гц)"
+    )
+    parser.add_argument(
+        "--freq-max",
+        type=float,
+        default=None,
+        help="Макс. частота анализа (Гц)"
+    )
+    parser.add_argument(
+        "--window",
+        type=str,
+        default="hann",
+        help="Окно для FFT ('hann' или 'none')"
+    )
+    
+    args = parser.parse_args()
+
+    try:
+        # 1. Загрузка сигнала
+        print(f"Загрузка сигнала из {args.signal}...")
+        signal = load_timeseries_csv(args.signal, column=args.column, skip_header=True)
+        print(f"  Загружено {len(signal)} отсчётов")
+
+        # 2. Конфиг канала и анализ
+        window_value = None if args.window.lower() == "none" else args.window
+        
+        config = ChannelConfig(
+            name="channel-0",
+            dt=args.dt,
+            window=window_value,
+            freq_min=args.freq_min,
+            freq_max=args.freq_max,
+        )
+        
+        print(f"Анализ спектра (dt={args.dt}, window={window_value})...")
+        analyzer = SpectralAnalyzer(config=config)
+        current_spectrum = analyzer.analyze(signal)
+        print(f"  Спектр содержит {len(current_spectrum.omega)} частотных компонент")
+
+        # 3. Загрузка эталонного спектра
+        print(f"Загрузка эталонного спектра из {args.ref}...")
+        reference = load_spectrum_npz(args.ref)
+        print(f"  Эталонный спектр содержит {len(reference.omega)} частотных компонент")
+
+        # 4. Мониторинг
+        print(f"Сравнение с эталоном (threshold={args.threshold})...")
+        monitor = HealthMonitor(reference=reference, threshold=args.threshold)
+        score = monitor.score(current_spectrum)
+        is_anom = monitor.is_anomalous(current_spectrum)
+
+        # 5. Вывод результата
+        print("\n" + "=" * 60)
+        status = "ANOMALY" if is_anom else "OK"
+        print(f"Status: {status}")
+        print(f"Score (L2 distance): {score:.6f}")
+        print(f"Threshold: {args.threshold:.6f}")
+        print("=" * 60)
+        
+        # Exit code: 0 для OK, 1 для ANOMALY
+        return 1 if is_anom else 0
+        
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\diagnostics.py
+================================================================================
+
+import numpy as np
+from dataclasses import dataclass
+from .timeseries import timeseries_to_spectrum
+from .spectrum import Spectrum1D
+from .material import MaterialSignature
+
+
+@dataclass
+class ChannelConfig:
+    """
+    Конфигурация одного канала измерений.
+
+    Attributes:
+        name: Имя канала (строка для отчётов).
+        dt: Шаг по времени (секунды).
+        window: Тип окна для FFT ("hann" или None).
+        freq_min: Минимальная частота анализа (Гц).
+        freq_max: Максимальная частота анализа (Гц).
+    """
+    name: str
+    dt: float
+    window: str = "hann"
+    freq_min: float | None = None
+    freq_max: float | None = None
+
+
+class SpectralAnalyzer:
+    """
+    Инструмент: временной ряд -> спектр -> обрезка по диапазону частот.
+    """
+
+    def __init__(self, config: ChannelConfig):
+        """
+        Args:
+            config: Конфигурация канала.
+        """
+        self.config = config
+
+    def analyze(self, signal: np.ndarray) -> Spectrum1D:
+        """
+        Преобразовать сигнал во времени в Spectrum1D с учётом:
+        - удаления DC,
+        - окна,
+        - вырезания диапазона частот [freq_min, freq_max] (если заданы).
+
+        Args:
+            signal: Временной ряд (1D array).
+
+        Returns:
+            Spectrum1D только по выбранному диапазону частот.
+        """
+        # Преобразование в спектр
+        spectrum = timeseries_to_spectrum(
+            signal,
+            dt=self.config.dt,
+            window=self.config.window
+        )
+        
+        # Если не заданы ограничения частот, вернуть весь спектр
+        if self.config.freq_min is None and self.config.freq_max is None:
+            return spectrum
+        
+        # Преобразовать omega в Герцы
+        freq_hz = spectrum.omega / (2 * np.pi)
+        
+        # Определить маску для диапазона частот
+        mask = np.ones(len(freq_hz), dtype=bool)
+        
+        if self.config.freq_min is not None:
+            mask &= (freq_hz >= self.config.freq_min)
+        
+        if self.config.freq_max is not None:
+            mask &= (freq_hz <= self.config.freq_max)
+        
+        # Вырезать диапазон
+        omega_filtered = spectrum.omega[mask]
+        power_filtered = spectrum.power[mask]
+        
+        return Spectrum1D(omega=omega_filtered, power=power_filtered)
+
+
+class HealthMonitor:
+    """
+    Монитор "здоровья" канала по спектру.
+    """
+
+    def __init__(self, reference: Spectrum1D, threshold: float):
+        """
+        Args:
+            reference: Эталонный спектр "здорового" состояния.
+            threshold: Порог аномальности по L2-дистанции.
+        """
+        self.signature = MaterialSignature(reference=reference)
+        self.threshold = float(threshold)
+
+    def score(self, current: Spectrum1D) -> float:
+        """
+        Вернуть L2-дистанцию между текущим спектром и эталонным.
+        
+        Args:
+            current: Текущий спектр.
+        
+        Returns:
+            L2-расстояние (скаляр).
+        """
+        return self.signature.distance_l2(current)
+
+    def is_anomalous(self, current: Spectrum1D) -> bool:
+        """
+        True, если текущий спектр аномален (distance > threshold).
+        
+        Args:
+            current: Текущий спектр.
+        
+        Returns:
+            True если аномален, False иначе.
+        """
+        return self.signature.is_anomalous(current, self.threshold)
 
 
 
@@ -469,6 +816,201 @@ def spectral_pressure_difference(
     delta_p = np.sum(spectrum_bg.power * delta_alpha)
     
     return float(delta_p)
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\io.py
+================================================================================
+
+import numpy as np
+from pathlib import Path
+from .spectrum import Spectrum1D
+
+
+def load_timeseries_csv(
+    path: str,
+    column: int = 0,
+    skip_header: bool = True
+) -> np.ndarray:
+    """
+    Загрузить одномерный временной ряд из CSV.
+
+    Параметры:
+        path: Путь к файлу CSV.
+        column: Индекс колонки (0-based), где лежит сигнал.
+        skip_header: Если True, пропустить первую строку (заголовок).
+
+    Возвращает:
+        1D np.ndarray с данными сигнала.
+    
+    Raises:
+        ValueError: Если файл пустой, колонка отсутствует или файл не найден.
+    """
+    path_obj = Path(path)
+    
+    if not path_obj.exists():
+        raise ValueError(f"File not found: {path}")
+    
+    # Определяем число строк для пропуска
+    skiprows = 1 if skip_header else 0
+    
+    try:
+        # Загружаем данные
+        data = np.loadtxt(path, delimiter=',', skiprows=skiprows, ndmin=2)
+    except Exception as e:
+        raise ValueError(f"Failed to load CSV file {path}: {e}")
+    
+    # Проверка на пустой файл
+    if data.size == 0:
+        raise ValueError(f"File {path} is empty")
+    
+    # Если данные одномерные, сделать двумерными
+    if data.ndim == 1:
+        data = data.reshape(-1, 1)
+    
+    # Проверка корректности индекса колонки
+    if column >= data.shape[1] or column < 0:
+        raise ValueError(
+            f"Column index {column} is out of range. "
+            f"File has {data.shape[1]} columns (indices 0..{data.shape[1]-1})"
+        )
+    
+    # Извлечь нужную колонку
+    signal = data[:, column]
+    
+    return signal
+
+
+def save_spectrum_npz(spectrum: Spectrum1D, path: str) -> None:
+    """
+    Сохранить Spectrum1D в .npz (omega, power).
+    
+    Args:
+        spectrum: Спектр для сохранения.
+        path: Путь к файлу .npz.
+    """
+    np.savez(path, omega=spectrum.omega, power=spectrum.power)
+
+
+def load_spectrum_npz(path: str) -> Spectrum1D:
+    """
+    Загрузить Spectrum1D из .npz.
+    Ожидает массивы 'omega' и 'power'.
+    
+    Args:
+        path: Путь к файлу .npz.
+    
+    Returns:
+        Загруженный Spectrum1D.
+    
+    Raises:
+        ValueError: Если файл не найден или отсутствуют ожидаемые ключи.
+    """
+    path_obj = Path(path)
+    
+    if not path_obj.exists():
+        raise ValueError(f"File not found: {path}")
+    
+    try:
+        data = np.load(path)
+    except Exception as e:
+        raise ValueError(f"Failed to load .npz file {path}: {e}")
+    
+    # Проверка наличия необходимых ключей
+    if 'omega' not in data or 'power' not in data:
+        raise ValueError(
+            f"File {path} missing required keys. "
+            f"Expected 'omega' and 'power', found: {list(data.keys())}"
+        )
+    
+    omega = data['omega']
+    power = data['power']
+    
+    return Spectrum1D(omega=omega, power=power)
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\material.py
+================================================================================
+
+import numpy as np
+from dataclasses import dataclass
+from .spectrum import Spectrum1D
+
+
+@dataclass
+class MaterialSignature:
+    """
+    Спектральная подпись материала/узла.
+    
+    Содержит:
+    - опорный спектр (reference) в нормальном состоянии,
+    - простую метрику "расстояния" до нового спектра.
+    
+    Используется для детекции дефектов/аномалий по изменению
+    спектральных характеристик.
+    """
+    reference: Spectrum1D
+    
+    def distance_l2(self, other: Spectrum1D) -> float:
+        """
+        L2-норма между нормированными спектрами.
+        
+        Args:
+            other: Спектр для сравнения с reference.
+        
+        Returns:
+            L2-расстояние между нормированными спектрами.
+        
+        Raises:
+            ValueError: Если сетки по частоте не совпадают.
+        
+        Notes:
+            Спектры нормируются перед сравнением, чтобы различия
+            в амплитуде не влияли на детекцию изменения формы спектра.
+        """
+        # Проверка совпадения частотных сеток
+        if not np.array_equal(self.reference.omega, other.omega):
+            raise ValueError(
+                "Frequency grids do not match. "
+                f"Reference has {len(self.reference.omega)} points, "
+                f"other has {len(other.omega)} points. "
+                "Cannot compute distance."
+            )
+        
+        # Нормируем оба спектра
+        ref_normalized = self.reference.normalize()
+        other_normalized = other.normalize()
+        
+        # Вычисляем L2-расстояние
+        diff = ref_normalized.power - other_normalized.power
+        distance = np.sqrt(np.sum(diff ** 2))
+        
+        return float(distance)
+    
+    def is_anomalous(self, other: Spectrum1D, threshold: float) -> bool:
+        """
+        Вернуть True, если distance_l2(other) > threshold.
+        
+        Args:
+            other: Спектр для проверки.
+            threshold: Порог аномальности.
+        
+        Returns:
+            True если спектр аномален, False иначе.
+        
+        Raises:
+            ValueError: Если сетки по частоте не совпадают.
+        
+        Example:
+            >>> sig = MaterialSignature(reference=normal_spectrum)
+            >>> if sig.is_anomalous(test_spectrum, threshold=0.1):
+            ...     print("Обнаружена аномалия!")
+        """
+        distance = self.distance_l2(other)
+        return distance > threshold
 
 
 
@@ -581,6 +1123,7 @@ def symmetric_newton(
     h0: float = 1e-3,
     max_iter: int = 50,
     tol: float = 1e-10,
+    tol_step: float = 1e-12,
 ) -> Tuple[float, int]:
     """
     Найти корень уравнения f(x) = 0 симметричным методом Ньютона,
@@ -598,6 +1141,7 @@ def symmetric_newton(
         h0: начальный шаг для симметричной разности
         max_iter: максимальное число итераций
         tol: допуск по |f(x)|
+        tol_step: допуск по величине шага |delta|
 
     Возвращает:
         x_root: найденное значение x, для которого f(x) ≈ 0
@@ -605,6 +1149,12 @@ def symmetric_newton(
     
     Raises:
         ValueError: если метод расходится (|x| становится слишком большим)
+        
+    Notes:
+        Функция останавливается, если выполнено ЛЮБОЕ из условий:
+        - |f(x)| < tol
+        - |delta| < tol_step (полезно на плоских участках)
+        - достигнуто max_iter
     """
     x = float(x0)
     h = float(h0)
@@ -612,7 +1162,7 @@ def symmetric_newton(
     for i in range(max_iter):
         fx = f(x)
         
-        # Check convergence
+        # Check convergence by function value
         if abs(fx) < tol:
             return x, i
         
@@ -639,6 +1189,10 @@ def symmetric_newton(
         # Newton step
         delta = fx / df
         
+        # Check convergence by step size
+        if abs(delta) < tol_step:
+            return x, i
+        
         # Adaptive step: if step is too large, reduce it
         if abs(delta) > 100:
             delta = 100 * np.sign(delta)
@@ -661,6 +1215,7 @@ def symmetric_newton(
     
     # Reached max iterations
     return x, max_iter
+
 
 
 
@@ -749,6 +1304,261 @@ class Spectrum1D:
             omega=self.omega.copy(),
             power=self.power * alpha
         )
+    
+    @classmethod
+    def from_function(cls, omega: np.ndarray, func):
+        """
+        Создать Spectrum1D из функции power(omega).
+        
+        Args:
+            omega: Массив частот.
+            func: Функция, принимающая omega и возвращающая power.
+        
+        Returns:
+            Новый экземпляр Spectrum1D.
+        
+        Raises:
+            ValueError: Если func(omega) вернула массив несовместимой формы.
+        
+        Example:
+            >>> omega = np.linspace(0, 10, 100)
+            >>> spec = Spectrum1D.from_function(omega, lambda w: np.exp(-w))
+        """
+        omega = np.asarray(omega, dtype=float)
+        power = np.asarray(func(omega), dtype=float)
+        
+        if power.shape != omega.shape:
+            raise ValueError(
+                f"func(omega) must return array with same shape as omega. "
+                f"Got power shape {power.shape}, expected {omega.shape}"
+            )
+        
+        return cls(omega=omega, power=power)
+
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\timeseries.py
+================================================================================
+
+import numpy as np
+from .spectrum import Spectrum1D
+
+
+def timeseries_to_spectrum(
+    signal: np.ndarray,
+    dt: float,
+    window: str = "hann",
+) -> Spectrum1D:
+    """
+    Преобразовать одномерный временной сигнал в амплитудный спектр.
+    
+    Параметры:
+        signal: 1D-массив отсчётов во времени.
+        dt: шаг по времени (секунды).
+        window: тип окна ("hann" или None).
+    
+    Возвращает:
+        Spectrum1D с:
+            omega: угловые частоты (rad/s) для положительных частот.
+            power: |FFT|^2 / N или аналогичная нормировка.
+    
+    Example:
+        >>> t = np.arange(0, 1.0, 0.001)
+        >>> signal = np.sin(2 * np.pi * 50 * t)  # 50 Hz
+        >>> spectrum = timeseries_to_spectrum(signal, dt=0.001)
+    """
+    signal = np.asarray(signal, dtype=float)
+    
+    if signal.ndim != 1:
+        raise ValueError(f"Signal must be 1D array, got shape {signal.shape}")
+    
+    n = len(signal)
+    if n == 0:
+        raise ValueError("Signal must not be empty")
+    
+    # Удаление DC-компонента (вычитание среднего)
+    signal_ac = signal - np.mean(signal)
+    
+    # Применение оконной функции
+    if window == "hann":
+        window_func = np.hanning(n)
+        signal_windowed = signal_ac * window_func
+    elif window is None:
+        signal_windowed = signal_ac
+    else:
+        raise ValueError(f"Unknown window type: {window}. Use 'hann' or None.")
+    
+    # FFT (только положительные частоты)
+    fft_vals = np.fft.rfft(signal_windowed)
+    
+    # Частоты в Герцах
+    freq_hz = np.fft.rfftfreq(n, d=dt)
+    
+    # Преобразование в угловые частоты (rad/s)
+    omega = 2 * np.pi * freq_hz
+    
+    # Мощность: |FFT|^2, нормированная на количество точек
+    # Коэффициент 2 для учёта энергии в отрицательных частотах (кроме DC и Nyquist)
+    power = np.abs(fft_vals) ** 2 / n
+    
+    # Удвоить мощность для всех частот кроме DC (индекс 0) и Nyquist (последний для чётного n)
+    if n % 2 == 0:
+        # Чётное n: DC и Nyquist не удваиваются
+        power[1:-1] *= 2
+    else:
+        # Нечётное n: только DC не удваивается
+        power[1:] *= 2
+    
+    return Spectrum1D(omega=omega, power=power)
+
+
+
+================================================================================
+ФАЙЛ: tests\test_diagnostics.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.diagnostics import ChannelConfig, SpectralAnalyzer, HealthMonitor
+from spectral_physics.spectrum import Spectrum1D
+
+
+def test_channel_config_creation():
+    """Test basic ChannelConfig creation."""
+    config = ChannelConfig(
+        name="test",
+        dt=0.001,
+        window="hann",
+        freq_min=10.0,
+        freq_max=100.0
+    )
+    
+    assert config.name == "test"
+    assert config.dt == 0.001
+    assert config.window == "hann"
+    assert config.freq_min == 10.0
+    assert config.freq_max == 100.0
+
+
+def test_spectral_analyzer_basic():
+    """Test SpectralAnalyzer with known sine wave."""
+    freq = 50.0  # Hz
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    signal = np.sin(2 * np.pi * freq * t)
+    
+    config = ChannelConfig(name="test", dt=dt)
+    analyzer = SpectralAnalyzer(config)
+    spectrum = analyzer.analyze(signal)
+    
+    # Should have peak near 50 Hz
+    freq_hz = spectrum.omega / (2 * np.pi)
+    peak_idx = np.argmax(spectrum.power)
+    peak_freq = freq_hz[peak_idx]
+    
+    assert abs(peak_freq - freq) < 5.0  # Within 5 Hz
+
+
+def test_spectral_analyzer_freq_filter():
+    """Test that freq_min/freq_max actually filter frequencies."""
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    # Mix of low and high frequencies
+    signal = (
+        np.sin(2 * np.pi * 10 * t) +
+        np.sin(2 * np.pi * 100 * t)
+    )
+    
+    # Analyze with no filter
+    config_all = ChannelConfig(name="all", dt=dt)
+    analyzer_all = SpectralAnalyzer(config_all)
+    spectrum_all = analyzer_all.analyze(signal)
+    
+    # Analyze with filter (only 50-150 Hz)
+    config_filtered = ChannelConfig(
+        name="filtered",
+        dt=dt,
+        freq_min=50.0,
+        freq_max=150.0
+    )
+    analyzer_filtered = SpectralAnalyzer(config_filtered)
+    spectrum_filtered = analyzer_filtered.analyze(signal)
+    
+    # Filtered spectrum should be smaller
+    assert len(spectrum_filtered.omega) < len(spectrum_all.omega)
+    
+    # All frequencies in filtered spectrum should be in range
+    freq_hz = spectrum_filtered.omega / (2 * np.pi)
+    assert np.all(freq_hz >= 50.0)
+    assert np.all(freq_hz <= 150.0)
+
+
+def test_health_monitor_score():
+    """Test HealthMonitor.score calculation."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power_ref = np.array([1.0, 2.0, 1.0])
+    power_current = np.array([1.0, 2.0, 1.0])  # Identical
+    
+    ref_spec = Spectrum1D(omega=omega, power=power_ref)
+    current_spec = Spectrum1D(omega=omega, power=power_current)
+    
+    monitor = HealthMonitor(reference=ref_spec, threshold=0.1)
+    score = monitor.score(current_spec)
+    
+    # Score should be zero for identical spectra
+    assert abs(score) < 1e-10
+
+
+def test_health_monitor_is_anomalous_false():
+    """Test that  HealthMonitor correctly identifies normal spectrum."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 1.0])
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    monitor = HealthMonitor(reference=spec, threshold=0.1)
+    
+    is_anom = monitor.is_anomalous(spec)
+    
+    assert is_anom is False
+
+
+def test_health_monitor_is_anomalous_true():
+    """Test that HealthMonitor correctly identifies anomaly."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power_ref = np.array([1.0, 2.0, 1.0])
+    power_anom = np.array([5.0, 0.5, 3.0])  # Very different
+    
+    ref_spec = Spectrum1D(omega=omega, power=power_ref)
+    anom_spec = Spectrum1D(omega=omega, power=power_anom)
+    
+    monitor = HealthMonitor(reference=ref_spec, threshold=0.1)
+    is_anom = monitor.is_anomalous(anom_spec)
+    
+    assert is_anom is True
+
+
+def test_spectral_analyzer_window_none():
+    """Test SpectralAnalyzer with no window."""
+    freq = 50.0
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    signal = np.sin(2 * np.pi * freq * t)
+    
+    config = ChannelConfig(name="test", dt=dt, window=None)
+    analyzer = SpectralAnalyzer(config)
+    spectrum = analyzer.analyze(signal)
+    
+    # Should still work
+    assert len(spectrum.omega) > 0
+    assert len(spectrum.power) > 0
 
 
 
@@ -870,6 +1680,265 @@ def test_spectral_pressure_realistic_scenario():
     # Should be positive (because left blocks more at high freq where power is)
     # The exact value depends on the convolution, but it should be positive
     assert delta_p != 0  # Non-trivial result
+
+
+
+================================================================================
+ФАЙЛ: tests\test_io.py
+================================================================================
+
+import numpy as np
+import pytest
+import tempfile
+from pathlib import Path
+from spectral_physics.io import (
+    load_timeseries_csv,
+    save_spectrum_npz,
+    load_spectrum_npz
+)
+from spectral_physics.spectrum import Spectrum1D
+
+
+def test_load_timeseries_csv_simple():
+    """Test loading simple CSV without header."""
+    # Create temporary CSV
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        f.write("1.0\n2.0\n3.0\n4.0\n5.0\n")
+        temp_path = f.name
+    
+    try:
+        signal = load_timeseries_csv(temp_path, column=0, skip_header=False)
+        
+        expected = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        np.testing.assert_array_equal(signal, expected)
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_load_timeseries_csv_with_header():
+    """Test loading CSV with header."""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.css', delete=False) as f:
+        f.write("time,value\n")
+        f.write("0.0,1.0\n0.1,2.0\n0.2,3.0\n")
+        temp_path = f.name
+    
+    try:
+        signal = load_timeseries_csv(temp_path, column=1, skip_header=True)
+        
+        expected = np.array([1.0, 2.0, 3.0])
+        np.testing.assert_array_equal(signal, expected)
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_load_timeseries_csv_multiple_columns():
+    """Test loading CSV with multiple columns."""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        f.write("1.0,10.0,100.0\n2.0,20.0,200.0\n3.0,30.0,300.0\n")
+        temp_path = f.name
+    
+    try:
+        # Load column 1
+        signal = load_timeseries_csv(temp_path, column=1, skip_header=False)
+        expected = np.array([10.0, 20.0, 30.0])
+        np.testing.assert_array_equal(signal, expected)
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_load_timeseries_csv_file_not_found():
+    """Test that missing file raises ValueError."""
+    with pytest.raises(ValueError, match="File not found"):
+        load_timeseries_csv("nonexistent.csv")
+
+
+def test_load_timeseries_csv_invalid_column():
+    """Test that invalid column index raises ValueError."""
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        f.write("1.0,2.0\n3.0,4.0\n")
+        temp_path = f.name
+    
+    try:
+        with pytest.raises(ValueError, match="Column index .* out of range"):
+            load_timeseries_csv(temp_path, column=5, skip_header=False)
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_save_load_spectrum_npz():
+    """Test save and load spectrum roundtrip."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([0.5, 1.0, 0.5])
+    
+    original = Spectrum1D(omega=omega, power=power)
+    
+    # Save
+    with tempfile.NamedTemporaryFile(suffix='.npz', delete=False) as f:
+        temp_path = f.name
+    
+    try:
+        save_spectrum_npz(original, temp_path)
+        
+        # Load
+        loaded = load_spectrum_npz(temp_path)
+        
+        # Verify
+        np.testing.assert_array_equal(loaded.omega, omega)
+        np.testing.assert_array_equal(loaded.power, power)
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_load_spectrum_npz_missing_file():
+    """Test that missing file raises ValueError."""
+    with pytest.raises(ValueError, match="File not found"):
+        load_spectrum_npz("nonexistent.npz")
+
+
+def test_load_spectrum_npz_missing_keys():
+    """Test that file missing required keys raises ValueError."""
+    # Create npz with wrong keys
+    with tempfile.NamedTemporaryFile(suffix='.npz', delete=False) as f:
+        temp_path = f.name
+    
+    try:
+        np.savez(temp_path, wrong_key=np.array([1, 2, 3]))
+        
+        with pytest.raises(ValueError, match="missing required keys"):
+            load_spectrum_npz(temp_path)
+    finally:
+        Path(temp_path).unlink()
+
+
+
+================================================================================
+ФАЙЛ: tests\test_material.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.material import MaterialSignature
+from spectral_physics.spectrum import Spectrum1D
+
+
+def test_distance_identical_spectra():
+    """Test that distance between identical spectra is zero."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 1.0])
+    
+    spec1 = Spectrum1D(omega=omega, power=power)
+    spec2 = Spectrum1D(omega=omega, power=power.copy())
+    
+    sig = MaterialSignature(reference=spec1)
+    distance = sig.distance_l2(spec2)
+    
+    assert abs(distance) < 1e-10
+
+
+def test_distance_slightly_different():
+    """Test distance for slightly different spectra."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power1 = np.array([1.0, 2.0, 1.0])
+    power2 = np.array([1.0, 2.1, 1.0])  # Slight difference
+    
+    spec1 = Spectrum1D(omega=omega, power=power1)
+    spec2 = Spectrum1D(omega=omega, power=power2)
+    
+    sig = MaterialSignature(reference=spec1)
+    distance = sig.distance_l2(spec2)
+    
+    # Should be small but non-zero
+    assert distance > 0
+    assert distance < 1.0
+
+
+def test_distance_very_different():
+    """Test distance for very different spectra."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power1 = np.array([1.0, 2.0, 1.0])
+    power2 = np.array([5.0, 0.5, 3.0])  # Very different shape
+    
+    spec1 = Spectrum1D(omega=omega, power=power1)
+    spec2 = Spectrum1D(omega=omega, power=power2)
+    
+    sig = MaterialSignature(reference=spec1)
+    distance = sig.distance_l2(spec2)
+    
+    # Should be large
+    assert distance > 0.5
+
+
+def test_distance_mismatched_frequencies():
+    """Test that mismatched frequency grids raise ValueError."""
+    omega1 = np.array([1.0, 2.0, 3.0])
+    omega2 = np.array([1.0, 2.0, 3.0, 4.0])  # Different length
+    
+    spec1 = Spectrum1D(omega=omega1, power=np.array([1.0, 2.0, 1.0]))
+    spec2 = Spectrum1D(omega=omega2, power=np.array([1.0, 2.0, 1.0, 1.0]))
+    
+    sig = MaterialSignature(reference=spec1)
+    
+    with pytest.raises(ValueError, match="Frequency grids do not match"):
+        sig.distance_l2(spec2)
+
+
+def test_is_anomalous_normal():
+    """Test that identical spectrum is not anomalous."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 1.0])
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    sig = MaterialSignature(reference=spec)
+    
+    is_anom = sig.is_anomalous(spec, threshold=0.01)
+    
+    assert is_anom is False
+
+
+def test_is_anomalous_below_threshold():
+    """Test that small difference is not anomalous."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power1 = np.array([1.0, 2.0, 1.0])
+    power2 = np.array([1.0, 2.01, 1.0])  # Tiny difference
+    
+    spec1 = Spectrum1D(omega=omega, power=power1)
+    spec2 = Spectrum1D(omega=omega, power=power2)
+    
+    sig = MaterialSignature(reference=spec1)
+    is_anom = sig.is_anomalous(spec2, threshold=1.0)  # High threshold
+    
+    assert is_anom is False
+
+
+def test_is_anomalous_above_threshold():
+    """Test that large difference is anomalous."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power1 = np.array([1.0, 2.0, 1.0])
+    power2 = np.array([5.0, 0.5, 3.0])  # Very different
+    
+    spec1 = Spectrum1D(omega=omega, power=power1)
+    spec2 = Spectrum1D(omega=omega, power=power2)
+    
+    sig = MaterialSignature(reference=spec1)
+    is_anom = sig.is_anomalous(spec2, threshold=0.1)  # Low threshold
+    
+    assert is_anom is True
+
+
+def test_distance_normalized():
+    """Test that distance is based on normalized spectra."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power1 = np.array([1.0, 2.0, 1.0])
+    power2 = np.array([2.0, 4.0, 2.0])  # Same shape, double amplitude
+    
+    spec1 = Spectrum1D(omega=omega, power=power1)
+    spec2 = Spectrum1D(omega=omega, power=power2)
+    
+    sig = MaterialSignature(reference=spec1)
+    distance = sig.distance_l2(spec2)
+    
+    # Should be zero since normalized shapes are identical
+    assert abs(distance) < 1e-10
 
 
 
@@ -1131,6 +2200,22 @@ def test_initial_guess_is_root():
     assert n_iter == 0  # Should converge immediately
 
 
+def test_tol_step_stops_on_flat_region():
+    """Test that tol_step criterion stops iteration on flat regions."""
+    def f(x):
+        return x**3
+    
+    # With very tight tol, we'd wait forever
+    # But tol_step should kick in and stop earlier
+    x_root, n_iter = symmetric_newton(f, x0=1.0, tol=1e-20, tol_step=1e-6)
+    
+    # Should stop due to small step, not small function value
+    assert n_iter < 50
+    # Result should still be close to zero
+    assert abs(x_root) < 0.1
+
+
+
 
 ================================================================================
 ФАЙЛ: tests\test_spectrum.py
@@ -1258,5 +2343,193 @@ def test_total_power_with_trapz():
     # The integral should be smaller than the sum for this case
     # because trapz accounts for spacing
     assert total_trapz < total_sum
+
+
+def test_from_function():
+    """Test creating Spectrum1D from a function."""
+    omega = np.linspace(0, 1, 5)
+    spec = Spectrum1D.from_function(omega, lambda w: 2*w)
+    
+    np.testing.assert_array_equal(spec.omega, omega)
+    np.testing.assert_array_equal(spec.power, 2*omega)
+
+
+def test_from_function_exponential():
+    """Test from_function with exponential decay."""
+    omega = np.linspace(0, 5, 50)
+    spec = Spectrum1D.from_function(omega, np.exp)
+    
+    expected_power = np.exp(omega)
+    np.testing.assert_array_almost_equal(spec.power, expected_power)
+
+
+def test_from_function_shape_mismatch():
+    """Test that from_function raises error for wrong return shape."""
+    omega = np.linspace(0, 1, 5)
+    
+    def bad_func(w):
+        return np.array([1.0, 2.0])  # Wrong shape
+    
+    with pytest.raises(ValueError, match="same shape"):
+        Spectrum1D.from_function(omega, bad_func)
+
+
+
+
+
+================================================================================
+ФАЙЛ: tests\test_timeseries.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.timeseries import timeseries_to_spectrum
+
+
+def test_single_sine_wave():
+    """Test that single sine wave produces peak at correct frequency."""
+    # Generate 50 Hz sine wave
+    freq = 50.0  # Hz
+    duration = 1.0  # seconds
+    dt = 0.001  # 1 ms sampling
+    
+    t = np.arange(0, duration, dt)
+    signal = np.sin(2 * np.pi * freq * t)
+    
+    spectrum = timeseries_to_spectrum(signal, dt=dt)
+    
+    # Find peak frequency
+    peak_idx = np.argmax(spectrum.power)
+    peak_omega = spectrum.omega[peak_idx]
+    peak_freq_hz = peak_omega / (2 * np.pi)
+    
+    # Should be close to 50 Hz
+    assert abs(peak_freq_hz - freq) < 2.0  # Within 2 Hz
+
+
+def test_two_sine_waves():
+    """Test that sum of two sines produces two peaks."""
+    freq1 = 50.0  # Hz
+    freq2 = 120.0  # Hz
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    signal = np.sin(2 * np.pi * freq1 * t) + 0.5 * np.sin(2 * np.pi * freq2 * t)
+    
+    spectrum = timeseries_to_spectrum(signal, dt=dt)
+    
+    # Convert omega to Hz
+    freq_hz = spectrum.omega / (2 * np.pi)
+    
+    # Find two largest peaks
+    peak_indices = np.argsort(spectrum.power)[-2:]
+    peak_freqs = sorted(freq_hz[peak_indices])
+    
+    # Should have peaks near 50 and 120 Hz
+    assert abs(peak_freqs[0] - freq1) < 5.0
+    assert abs(peak_freqs[1] - freq2) < 5.0
+
+
+def test_constant_signal():
+    """Test that constant signal has maximum only near zero frequency."""
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    signal = np.ones_like(t) * 5.0  # Constant
+    
+    spectrum = timeseries_to_spectrum(signal, dt=dt)
+    
+    # Peak should be at or very close to zero frequency
+    peak_idx = np.argmax(spectrum.power)
+    peak_omega = spectrum.omega[peak_idx]
+    
+    assert peak_omega < 10.0  # Very low frequency
+
+
+def test_window_none():
+    """Test that window=None works."""
+    freq = 50.0
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    signal = np.sin(2 * np.pi * freq * t)
+    
+    spectrum = timeseries_to_spectrum(signal, dt=dt, window=None)
+    
+    # Should still produce spectrum
+    assert len(spectrum.omega) > 0
+    assert len(spectrum.power) > 0
+
+
+def test_window_hann():
+    """Test that window='hann' works."""
+    freq = 50.0
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    signal = np.sin(2 * np.pi * freq * t)
+    
+    spectrum = timeseries_to_spectrum(signal, dt=dt, window="hann")
+    
+    # Should still produce spectrum
+    assert len(spectrum.omega) > 0
+    assert len(spectrum.power) > 0
+
+
+def test_invalid_window():
+    """Test that invalid window raises ValueError."""
+    signal = np.array([1.0, 2.0, 3.0])
+    dt = 0.1
+    
+    with pytest.raises(ValueError, match="Unknown window type"):
+        timeseries_to_spectrum(signal, dt=dt, window="invalid")
+
+
+def test_empty_signal():
+    """Test that empty signal raises ValueError."""
+    signal = np.array([])
+    dt = 0.1
+    
+    with pytest.raises(ValueError, match="must not be empty"):
+        timeseries_to_spectrum(signal, dt=dt)
+
+
+def test_multidimensional_signal():
+    """Test that 2D signal raises ValueError."""
+    signal = np.array([[1.0, 2.0], [3.0, 4.0]])
+    dt = 0.1
+    
+    with pytest.raises(ValueError, match="must be 1D array"):
+        timeseries_to_spectrum(signal, dt=dt)
+
+
+def test_dc_removal():
+    """Test that DC component is removed."""
+    duration = 1.0
+    dt = 0.001
+    
+    t = np.arange(0, duration, dt)
+    signal = 10.0 + np.sin(2 * np.pi * 50 * t)  # DC offset + sine
+    
+    spectrum = timeseries_to_spectrum(signal, dt=dt)
+    
+    # DC component (first element) should be small after DC removal
+    # Note: won't be exactly zero due to window, but should be reduced
+    assert spectrum.power[0] < np.max(spectrum.power)
+
+
+def test_positive_frequencies_only():
+    """Test that only positive frequencies are returned."""
+    signal = np.random.randn(100)
+    dt = 0.01
+    
+    spectrum = timeseries_to_spectrum(signal, dt=dt)
+    
+    # All frequencies should be >= 0
+    assert np.all(spectrum.omega >= 0)
 
 
