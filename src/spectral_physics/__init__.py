@@ -1,16 +1,17 @@
 """
-SpectralPhysics-Lab: A library for spectral physics simulations.
-
-Modules:
-    - root_finding: Symmetric Newton method for root finding
-    - spectrum: 1D spectrum analysis tools
-    - medium_1d: 1D oscillator chain model
-    - grav_toy: Toy model for gravity via spectral shadows
+SpectralPhysics-Lab: базовые численные инструменты
+для спектральной физики.
 """
 
-__all__ = ["root_finding", "spectrum", "medium_1d", "grav_toy"]
+__all__ = [
+    "symmetric_newton",
+    "Spectrum1D",
+    "OscillatorChain1D",
+    "spectral_pressure_difference",
+]
 
-# Note: We don't import modules at top level to avoid heavy dependencies
-# Users should import specific modules as needed:
-#   from spectral_physics import root_finding
+# Lazy imports - пользователи должны импортировать нужные модули явно:
+#   from spectral_physics.root_finding import symmetric_newton
 #   from spectral_physics.spectrum import Spectrum1D
+#   from spectral_physics.medium_1d import OscillatorChain1D
+#   from spectral_physics.grav_toy import spectral_pressure_difference

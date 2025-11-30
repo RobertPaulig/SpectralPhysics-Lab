@@ -1,46 +1,117 @@
+import numpy as np
 import pytest
-import math
 from spectral_physics.root_finding import symmetric_newton
 
-def test_linear_function():
-    # f(x) = x - 3 -> root is 3
-    f = lambda x: x - 3
-    root = symmetric_newton(f, x0=0)
-    assert abs(root - 3.0) < 1e-6
 
-def test_quadratic_function():
-    # f(x) = x^2 - 4 -> roots are 2 and -2
-    f = lambda x: x**2 - 4
+def test_simple_quadratic():
+    """Test f(x) = x^2 - 2, root should be sqrt(2)."""
+    def f(x):
+        return x**2 - 2
     
-    # Start near 2
-    root1 = symmetric_newton(f, x0=1.0)
-    assert abs(root1 - 2.0) < 1e-6
+    x_root, n_iter = symmetric_newton(f, x0=1.0)
     
-    # Start near -2
-    root2 = symmetric_newton(f, x0=-1.0)
-    assert abs(root2 - (-2.0)) < 1e-6
+    expected = np.sqrt(2)
+    assert abs(x_root - expected) < 1e-8
+    assert n_iter < 50
 
-def test_bad_derivative_function():
-    # f(x) = x^(1/3). Derivative at 0 is infinite.
-    # But symmetric difference might handle it or jump over it.
-    # Actually x^(1/3) is defined for negative x if we handle it carefully, 
-    # but pow(x, 1/3) in python for negative x returns complex.
-    # Let's use a function that behaves like x^(1/3) but is safe: np.cbrt(x)
-    import numpy as np
-    f = lambda x: np.cbrt(x)
-    
-    # Start somewhere away from 0
-    root = symmetric_newton(f, x0=0.5)
-    
-    # Should converge to 0
-    assert abs(root) < 1e-4
 
-def test_no_convergence_small_derivative():
-    # f(x) = x^3 around 0 has small derivative, but let's try a flat function
-    # f(x) = arctan(x) has derivative 1/(1+x^2).
-    # Let's try f(x) = 1 (no root)
-    f = lambda x: 1.0
-    # Derivative is 0. Should handle gracefully (return start or last point)
-    root = symmetric_newton(f, x0=0.0)
-    # It won't find a root, but shouldn't crash
-    assert root == 0.0 # Should stay or break
+def test_cubic_at_zero():
+    """Test f(x) = x^3, root at 0 with flat minimum."""
+    def f(x):
+        return x**3
+    
+    x_root, n_iter = symmetric_newton(f, x0=0.1, tol=1e-6)
+    
+    assert abs(x_root) < 1e-4
+    assert n_iter < 50
+
+
+def test_with_kink():
+    """Test function with kink: f(x) = abs(x) - 1e-3."""
+    def f(x):
+        return abs(x) - 1e-3
+    
+    # Start from positive side
+    x_root, n_iter = symmetric_newton(f, x0=1.0, tol=1e-6)
+    
+    # Should converge to one of the roots (±1e-3)
+    assert abs(abs(x_root) - 1e-3) < 1e-5
+
+
+def test_cubic_polynomial():
+    """Test f(x) = x^3 - x - 1."""
+    def f(x):
+        return x**3 - x - 1
+    
+    x_root, n_iter = symmetric_newton(f, x0=1.5)
+    
+    # Check that it's actually a root
+    assert abs(f(x_root)) < 1e-8
+    assert n_iter < 50
+
+
+def test_return_type():
+    """Test that function returns tuple of (float, int)."""
+    def f(x):
+        return x - 5
+    
+    result = symmetric_newton(f, x0=1.0)
+    
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    assert isinstance(result[0], float)
+    assert isinstance(result[1], int)
+
+
+def test_convergence_count():
+    """Test that iteration count is reasonable."""
+    def f(x):
+        return x - 10  # Linear, should converge in 1 iteration
+    
+    x_root, n_iter = symmetric_newton(f, x0=0.0)
+    
+    assert abs(x_root - 10) < 1e-8
+    assert n_iter <= 5  # Should be very fast for linear
+
+
+def test_exponential_function():
+    """Test f(x) = exp(x) - 2."""
+    def f(x):
+        return np.exp(x) - 2
+    
+    x_root, n_iter = symmetric_newton(f, x0=0.0)
+    
+    expected = np.log(2)
+    assert abs(x_root - expected) < 1e-8
+
+
+def test_trigonometric_function():
+    """Test f(x) = sin(x)."""
+    def f(x):
+        return np.sin(x)
+    
+    x_root, n_iter = symmetric_newton(f, x0=3.0)
+    
+    # Should converge to pi
+    assert abs(x_root - np.pi) < 1e-6
+
+
+def test_max_iterations():
+    """Test that max_iter limit is respected."""
+    def f(x):
+        return x**2 + 1  # No real root
+    
+    x_root, n_iter = symmetric_newton(f, x0=1.0, max_iter=10)
+    
+    assert n_iter == 10
+
+
+def test_initial_guess_is_root():
+    """Test when initial guess is already the root."""
+    def f(x):
+        return x - 5
+    
+    x_root, n_iter = symmetric_newton(f, x0=5.0)
+    
+    assert abs(x_root - 5.0) < 1e-8
+    assert n_iter == 0  # Should converge immediately

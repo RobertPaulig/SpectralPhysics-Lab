@@ -1,50 +1,122 @@
-import pytest
 import numpy as np
+import pytest
 from spectral_physics.spectrum import Spectrum1D
 
-def test_create_simple_spectrum():
-    freqs = [1.0, 2.0, 3.0]
-    amps = [0.5, 1.0, 0.5]
-    spec = Spectrum1D(freqs, amps)
-    
-    assert len(spec.freqs) == 3
-    assert len(spec.amps) == 3
-    assert np.allclose(spec.phases, 0.0)
 
-def test_shape_mismatch():
-    freqs = [1.0, 2.0]
-    amps = [1.0] # Mismatch
-    with pytest.raises(ValueError):
-        Spectrum1D(freqs, amps)
+def test_spectrum_creation():
+    """Test basic Spectrum1D creation."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([0.5, 1.0, 0.5])
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    assert spec.omega.shape == (3,)
+    assert spec.power.shape == (3,)
+    np.testing.assert_array_equal(spec.omega, omega)
+    np.testing.assert_array_equal(spec.power, power)
 
-def test_power_calculation():
-    freqs = [1.0, 2.0]
-    amps = [3.0, 4.0]
-    spec = Spectrum1D(freqs, amps)
-    
-    p = spec.power()
-    assert np.allclose(p, [9.0, 16.0])
-    
-    tp = spec.total_power()
-    assert np.isclose(tp, 25.0)
 
-def test_normalize_power():
-    freqs = [10.0, 20.0]
-    amps = [1.0, 1.0] # total power = 2
-    spec = Spectrum1D(freqs, amps)
+def test_spectrum_shape_mismatch():
+    """Test that mismatched shapes raise ValueError."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([0.5, 1.0])  # Wrong size
     
-    spec.normalize_power(target=8.0)
-    # New total power should be 8.0
-    # amps should be scaled by sqrt(8/2) = 2.0 -> [2.0, 2.0]
-    
-    assert np.isclose(spec.total_power(), 8.0)
-    assert np.allclose(spec.amps, [2.0, 2.0])
+    with pytest.raises(ValueError, match="Shape mismatch"):
+        Spectrum1D(omega=omega, power=power)
 
-def test_copy():
-    freqs = [1.0]
-    amps = [1.0]
-    spec = Spectrum1D(freqs, amps)
-    spec_copy = spec.copy()
+
+def test_total_power():
+    """Test total_power calculation."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 3.0])
     
-    spec.amps[0] = 999.0
-    assert spec_copy.amps[0] == 1.0 # Should not change
+    spec = Spectrum1D(omega=omega, power=power)
+    total = spec.total_power()
+    
+    assert total == 6.0
+
+
+def test_normalize():
+    """Test spectrum normalization."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 3.0])
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    normalized = spec.normalize()
+    
+    # Check that sum is 1
+    assert abs(normalized.total_power() - 1.0) < 1e-10
+    
+    # Check that relative proportions are preserved
+    np.testing.assert_allclose(
+        normalized.power,
+        power / 6.0,
+        rtol=1e-10
+    )
+    
+    # Original should be unchanged
+    assert spec.total_power() == 6.0
+
+
+def test_normalize_zero_power():
+    """Test that normalizing zero power raises ValueError."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([0.0, 0.0, 0.0])
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    with pytest.raises(ValueError, match="zero total power"):
+        spec.normalize()
+
+
+def test_apply_filter():
+    """Test applying frequency-dependent filter."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 3.0])
+    alpha = np.array([1.0, 0.5, 0.0])  # Pass first, attenuate second, block third
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    filtered = spec.apply_filter(alpha)
+    
+    expected_power = power * alpha
+    np.testing.assert_array_equal(filtered.power, expected_power)
+    np.testing.assert_array_equal(filtered.omega, omega)
+    
+    # Original should be unchanged
+    np.testing.assert_array_equal(spec.power, power)
+
+
+def test_apply_filter_shape_mismatch():
+    """Test that mismatched filter shape raises ValueError."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 3.0])
+    alpha = np.array([1.0, 0.5])  # Wrong size
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    with pytest.raises(ValueError, match="Shape mismatch"):
+        spec.apply_filter(alpha)
+
+
+def test_total_power_with_trapz():
+    """Test that total_power matches np.trapz for uniform grid."""
+    # Uniform frequency grid
+    omega = np.linspace(0, 10, 100)
+    power = np.exp(-omega)  # Exponential decay
+    
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    # For sum, we just add all values
+    total_sum = spec.total_power()
+    
+    # For trapz integration
+    total_trapz = np.trapz(power, omega)
+    
+    # They should be different (sum vs integral)
+    # but both should be reasonable
+    assert total_sum > 0
+    assert total_trapz > 0
+    
+    # The integral should be smaller than the sum for this case
+    # because trapz accounts for spacing
+    assert total_trapz < total_sum

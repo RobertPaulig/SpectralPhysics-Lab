@@ -1,73 +1,91 @@
 import numpy as np
+from typing import Callable, Tuple
+
 
 def symmetric_newton(
-    f,
-    x0,
-    max_iter=50,
-    tol=1e-8,
-    h=1e-6,
-    verbose=False,
-):
+    f: Callable[[float], float],
+    x0: float,
+    h0: float = 1e-3,
+    max_iter: int = 50,
+    tol: float = 1e-10,
+) -> Tuple[float, int]:
     """
-    Находит корень уравнения f(x) = 0, используя симметричный метод Ньютона
-    с численным приближением производной.
+    Найти корень уравнения f(x) = 0 симметричным методом Ньютона,
+    не используя аналитическую производную.
+
+    Использует симметричную разностную производную:
+        f'(x) ≈ (f(x + h) - f(x - h)) / (2*h)
+
+    и адаптивно уменьшает h, если шаг получается слишком большим
+    или метод начинает расходиться.
 
     Параметры:
         f: вызываемая функция f(x) -> float
         x0: начальное приближение
+        h0: начальный шаг для симметричной разности
         max_iter: максимальное число итераций
         tol: допуск по |f(x)|
-        h: шаг для симметричной разности
-        verbose: если True, печатать прогресс
 
     Возвращает:
         x_root: найденное значение x, для которого f(x) ≈ 0
+        n_iter: число выполненных итераций
+    
+    Raises:
+        ValueError: если метод расходится (|x| становится слишком большим)
     """
     x = float(x0)
+    h = float(h0)
     
     for i in range(max_iter):
         fx = f(x)
+        
+        # Check convergence
         if abs(fx) < tol:
-            if verbose:
-                print(f"Converged at iter {i}: x={x}, f(x)={fx}")
-            return x
+            return x, i
+        
+        # Check for divergence
+        if abs(x) > 1e10:
+            raise ValueError(f"Method diverged: |x| = {abs(x)} > 1e10")
         
         # Symmetric difference derivative
         # f'(x) ≈ (f(x + h) - f(x - h)) / (2h)
-        df = (f(x + h) - f(x - h)) / (2 * h)
+        try:
+            df = (f(x + h) - f(x - h)) / (2 * h)
+        except Exception as e:
+            raise ValueError(f"Failed to compute derivative at x={x}: {e}")
         
-        if abs(df) < 1e-12:
-            if verbose:
-                print(f"Derivative too small at iter {i}: df={df}")
-            # Simple fallback or break? 
-            # Let's try to perturb x slightly or just break
-            # For robustness, let's just break to avoid division by zero
-            # Or maybe return current x with a warning?
-            # The task says: "Защититься от деления на очень маленькую производную"
-            # Let's stop here.
-            break
-            
+        # Protect against division by near-zero derivative
+        if abs(df) < 1e-14:
+            # Try reducing h
+            h = h / 2
+            if h < 1e-15:
+                # Give up
+                return x, i
+            continue
+        
         # Newton step
         delta = fx / df
+        
+        # Adaptive step: if step is too large, reduce it
+        if abs(delta) > 100:
+            delta = 100 * np.sign(delta)
+            h = h / 2  # Also reduce h for next iteration
+        
         x_new = x - delta
         
-        # Simple backtracking line search to prevent divergence
-        # If the new function value is worse (larger magnitude), reduce the step.
-        # This helps with functions like x^(1/3) where full Newton step overshoots.
-        for _ in range(5):
-            try:
-                fx_new = f(x_new)
-                if abs(fx_new) < abs(fx):
-                    break
-            except Exception:
-                pass # If f(x_new) fails, we definitely want to reduce step
-            
-            delta /= 2
+        # Simple backtracking: if new value is worse, reduce step
+        try:
+            fx_new = f(x_new)
+            if abs(fx_new) > abs(fx) * 2:  # Getting worse
+                delta = delta / 2
+                x_new = x - delta
+        except Exception:
+            # If evaluation fails, reduce step
+            delta = delta / 2
             x_new = x - delta
         
-        if verbose:
-            print(f"Iter {i}: x={x}, f(x)={fx}, df={df}, x_new={x_new}")
-            
         x = x_new
-        
-    return x
+    
+    # Reached max iterations
+    return x, max_iter
+
