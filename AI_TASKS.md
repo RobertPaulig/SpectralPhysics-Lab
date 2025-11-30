@@ -1,296 +1,282 @@
-Ооо, вот это уже не «я создал репо», а реально живой пакет 😄
-Давай честное код-ревью + следующий пакет задач для твоего ИИ.
+# МЕГА-ПРОЕКТ: spectral-health v1.0
+
+Цель: превратить текущий код в **полноценный инструмент диагностики машин**:
+
+- Вход: CSV с вибрацией/сигналами.
+- Выход: CLI-утилита `spectral-health`, которая:
+  - обучает "здоровый профиль" по историческим данным;
+  - анализирует новые данные;
+  - даёт статус по каждому каналу (OK / ANOMALY);
+  - пишет красивый Markdown-отчёт.
 
 ---
 
-## 1. Общая картина
+## ЭТАП 20. Доводим ядро и упаковку до боевого состояния
 
-У тебя уже есть:
+**Файлы:** `pyproject.toml`, `README.md`, `src/spectral_physics/cli.py`
 
-* `symmetric_newton` — рабочий, аккуратный метод.
-* `Spectrum1D` — нормальный объект спектра.
-* `OscillatorChain1D` — цепочка осцилляторов, eigenmodes считаются.
-* `spectral_pressure_difference` — игрушечная «спектральная тень».
-* Тесты для всего этого — и они не микроскопические, а вполне серьёзные.
+- [ ] Исправить `pyproject.toml`:
+  - корректный блок `[project]` с:
+    - `name`, `version`, `description`, `readme`, `requires-python`;
+    - `dependencies = ["numpy", "scipy", "matplotlib", "pyyaml"]` и т.п.
+  - рабочий `[project.scripts]`:
+    ```toml
+    [project.scripts]
+    spectral-health = "spectral_physics.cli:main"
+    ```
 
-Это уже версия **v0.0.1 живого ядра**. Это не болтовня, это код, который можно ставить в `pip install -e .` и использовать.
+- [ ] Поправить импорт `HealthProfile` в `cli.py`:
+  - импортировать `HealthProfile` из `spectral_physics.material`.
 
-Теперь — по файлам.
+- [ ] Прочистить `README.md`:
+  - убрать дублирующийся кусок текста;
+  - добавить раздел:
+    ```markdown
+    ## Installation
+
+    ```bash
+    pip install -e .
+    spectral-health --help
+    ```
+    ```
 
 ---
 
-## 2. Замечания по коду (без драм)
+## ЭТАП 21. YAML-конфиги и демонстрационный pipeline
 
-### 2.1. `__init__.py`
+**Новые файлы:**
+- `configs/pump_train.yaml`
+- `configs/pump_score.yaml`
+- `configs/pump_thresholds.yaml`
+- `examples/generate_synthetic_pump_data.py`
 
-```python
-__all__ = [
-    "symmetric_newton",
-    "Spectrum1D",
-    "OscillatorChain1D",
-    "spectral_pressure_difference",
-]
-```
+### 21.1. Пример конфигов
 
-Сейчас имена в `__all__` **не импортированы** в пакет, то есть:
+- [ ] Создать папку `configs/`.
 
-```python
-from spectral_physics import symmetric_newton
-```
+- [ ] `configs/pump_train.yaml` — пример конфигурации для обучения:
 
-упадёт с `AttributeError`.
+  ```yaml
+  dt: 0.001          # шаг дискретизации
+  window: hann
 
-Либо:
+  channels:
+    motor_vibration:
+      column: 1
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/train_motor_1.csv
+        - data/pump/train_motor_2.csv
 
-* делаешь явные импорты:
+    pump_vibration:
+      column: 2
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/train_pump_1.csv
+        - data/pump/train_pump_2.csv
+  ```
+
+- [ ] `configs/pump_score.yaml` — аналогично, но для **текущего состояния**:
+
+  ```yaml
+  dt: 0.001
+  window: hann
+
+  channels:
+    motor_vibration:
+      column: 1
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/current_motor.csv
+
+    pump_vibration:
+      column: 2
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/current_pump.csv
+  ```
+
+- [ ] `configs/pump_thresholds.yaml` — пороги:
+
+  ```yaml
+  motor_vibration: 0.15
+  pump_vibration: 0.20
+  ```
+
+### 21.2. Генератор синтетических данных
+
+**Файл:** `examples/generate_synthetic_pump_data.py`
+
+- [ ] Написать скрипт, который:
+
+  * создаёт папку `data/pump/`;
+  * генерирует тренировочные CSV:
+
+    * `train_motor_1.csv`, `train_motor_2.csv`;
+    * `train_pump_1.csv`, `train_pump_2.csv`;
+  * генерирует "текущие" CSV:
+
+    * `current_motor.csv` (нормальный);
+    * `current_pump.csv` (с аномалией: добавлен новый пик, шум или дрейф).
+
+- [ ] Формат CSV:
+
+  ```text
+  time, motor_vibration, pump_vibration
+  0.000, ...
+  0.001, ...
+  ...
+  ```
+
+  * первая строка — заголовок;
+  * столбец 1 — время, столбец 2 — мотор, столбец 3 — насос.
+
+- [ ] Внутри использовать `numpy` для генерации сигналов:
+
+  * Healthy: сумма нескольких синусов + немного шума;
+  * Anomaly: усиленный один из пиков + дополнительный шум.
+
+---
+
+## ЭТАП 22. Умный health-профиль с фичами (band-power + энтропия)
+
+Сейчас `MaterialSignature.distance_l2` сравнивает **нормированные спектры целиком** 
+
+Хочется добавить ещё один уровень: сравнение по набору фич.
+
+**Файлы:** `src/spectral_physics/material.py`, `src/spectral_physics/diagnostics.py`, `tests/test_material.py`, `tests/test_diagnostics.py`
+
+### 22.1. Вектор фич по спектру
+
+- [ ] Добавить в `diagnostics.py` функцию:
 
   ```python
-  from .root_finding import symmetric_newton
+  import numpy as np
   from .spectrum import Spectrum1D
-  from .medium_1d import OscillatorChain1D
-  from .grav_toy import spectral_pressure_difference
-  ```
-
-  и тогда `__all__` корректен;
-
-либо:
-
-* оставляешь как есть, но тогда в README честно писать:
-
-  ```python
-  from spectral_physics.root_finding import symmetric_newton
-  ```
-
-Я бы всё-таки **сделал удобный верхнеуровневый импорт** (через `__init__`), чтобы потом самому было приятнее жить.
-
----
-
-### 2.2. `root_finding.py` — `symmetric_newton`
-
-Сделано хорошо:
-
-* симметричная разностная производная;
-* защита от почти нулевого df;
-* ограничение на гигантский шаг;
-* небольшой backtracking.
-
-Что бы я добавил (не ломая API):
-
-1. **Критерий по шагу**
-   Сейчас остановка только по `|f(x)| < tol`.
-   Добавь ещё условие типа:
-
-   ```python
-   if abs(delta) < tol_step:
-       return x, i
-   ```
-
-   Особенно полезно для плоских минимумов (`x^3`, `abs(x)`), где `f(x)` снижается медленно.
-
-2. **Возможность передать tol отдельно**
-   Например:
-
-   ```python
-   def symmetric_newton(..., tol_f: float = 1e-10, tol_x: float = 1e-12)
-   ```
-
-   Но это уже «косметика», можно позже.
-
-В остальном — нормальный рабочий солвер.
-
----
-
-### 2.3. `Spectrum1D`
-
-Очень прилично:
-
-* проверка совпадения форм;
-* нормировка;
-* фильтр с проверкой размера.
-
-Мелкие предложения:
-
-1. **Фабричный метод из функции**
-   Чтобы можно было быстро строить спектр из `f(ω)`:
-
-   ```python
-   @classmethod
-   def from_function(cls, omega: np.ndarray, func):
-       power = func(omega)
-       return cls(omega=omega, power=power)
-   ```
-
-   Это резко упростит примеры.
-
-2. **Интеграл с учётом шага**
-   Сейчас `total_power` = `sum(power)`, что нормально для «дискретного» спектра.
-   Позже можно добавить:
-
-   ```python
-   def total_power_trapz(self) -> float:
-       return float(np.trapz(self.power, self.omega))
-   ```
-
-   и честно различать «сумма» vs «интеграл».
-
----
-
-### 2.4. `OscillatorChain1D`
-
-Отлично:
-
-* валидация параметров;
-* тридиагональная матрица;
-* eigenmodes через `scipy.linalg.eigh` с отсечкой отрицательных λ.
-
-Важный момент — **границы**:
-
-```python
-# Диагональ: 2*k везде
-```
-
-Это «жёстко закреплённые края» (fixed–fixed). Всё ок, но:
-
-* это надо **явно написать** в docstring (чтобы потом не мучиться, почему формула мод такая, а не другая);
-* в будущем полезно добавить флаг:
-
-  ```python
-  bc: str = "fixed"  # или "free"
-  ```
-
-и строить K в зависимости от `bc`. Но это уже следующая итерация.
-
----
-
-### 2.5. `grav_toy.py`
-
-Логика чистая:
-
-```python
-ΔP = Σ P(ω) * (α_right(ω) - α_left(ω))
-```
-
-Физически это «дискретная версия» `∫ P(ω)(α_R - α_L) dω`.
-
-Чего можно добавить потом:
-
-* опциональный учёт шага `Δω`:
-
-  ```python
-  delta_p = np.sum(spectrum_bg.power * delta_alpha) * d_omega
-  ```
-
-  или через `np.trapz`. Но для «toy model» и без этого нормально.
-
-Тесты у тебя хорошие, особенно с Гауссом.
-
----
-
-## 3. Что сказать ИИ ДАЛЬШЕ (готовый блок для `AI_TASKS.md`)
-
-Вот тебе следующий чёткий блок задач. Можешь просто добавить его в конец `AI_TASKS.md` как «ЭТАП 8–10».
-
-````markdown
----
-
-## ЭТАП 8. Удобный верхнеуровневый импорт
-
-**Файл:** `src/spectral_physics/__init__.py`
-
-- [ ] Добавить явные импорты в пакет:
-
-  ```python
-  from .root_finding import symmetric_newton
-  from .spectrum import Spectrum1D
-  from .medium_1d import OscillatorChain1D
-  from .grav_toy import spectral_pressure_difference
-````
-
-* [ ] Оставить `__all__` как есть.
-
-* [ ] Обновить `README.md`, чтобы в примерах можно было писать:
-
-  ```python
-  from spectral_physics import symmetric_newton, Spectrum1D
-  ```
-
----
-
-## ЭТАП 9. Улучшение symmetric_newton
-
-**Файл:** `src/spectral_physics/root_finding.py`
-
-* [ ] Добавить второй критерий остановки по шагу:
-
-  ```python
-  def symmetric_newton(..., tol: float = 1e-10, tol_step: float = 1e-12):
-      ...
-      if abs(fx) < tol or abs(delta) < tol_step:
-          return x, i
-  ```
-
-* [ ] Обновить docstring (описать `tol_step`).
-
-* [ ] Добавить новый тест в `tests/test_root_finding.py`:
-
-  ```python
-  def test_tol_step_stops_on_flat_region():
-      def f(x):
-          return x**3
-      x_root, n_iter = symmetric_newton(f, x0=1.0, tol=1e-20, tol_step=1e-6)
-      # По f(x) мы бы долго ждали, но по шагу должно остановиться раньше
-      assert n_iter < 50
-  ```
-
----
-
-## ЭТАП 10. Фабричный метод для Spectrum1D
-
-**Файл:** `src/spectral_physics/spectrum.py`
-
-* [ ] Добавить classmethod:
-
-  ```python
-  @classmethod
-  def from_function(cls, omega: np.ndarray, func):
+  from .diagnostics import spectral_band_power, spectral_entropy
+
+  def extract_features(
+      spectrum: Spectrum1D,
+      bands_hz: list[tuple[float, float]],
+  ) -> np.ndarray:
       """
-      Создать Spectrum1D из функции power(omega).
-
-      Пример:
-          omega = np.linspace(0, 10, 100)
-          spec = Spectrum1D.from_function(omega, lambda w: np.exp(-w))
+      Построить вектор фич:
+      [ band_power_1, ..., band_power_N, spectral_entropy ]
       """
-      omega = np.asarray(omega, dtype=float)
-      power = np.asarray(func(omega), dtype=float)
-      if power.shape != omega.shape:
-          raise ValueError("func(omega) must return array with same shape as omega")
-      return cls(omega=omega, power=power)
+      features = []
+      for fmin, fmax in bands_hz:
+          features.append(spectral_band_power(spectrum, fmin, fmax))
+      features.append(spectral_entropy(spectrum))
+      return np.asarray(features, dtype=float)
   ```
 
-* [ ] Добавить тест в `tests/test_spectrum.py`:
+- [ ] Добавить тест в `tests/test_diagnostics.py`:
+
+  * создать простой спектр с двумя частотами;
+  * проверить, что `extract_features` даёт ожидаемые значения band power;
+  * проверить, что размерность вектора = `len(bands) + 1`.
+
+### 22.2. Фичевая сигнатура материала
+
+- [ ] В `material.py` добавить новый dataclass:
 
   ```python
-  def test_from_function():
-      omega = np.linspace(0, 1, 5)
-      spec = Spectrum1D.from_function(omega, lambda w: 2*w)
-      np.testing.assert_array_equal(spec.omega, omega)
-      np.testing.assert_array_equal(spec.power, 2*omega)
+  @dataclass
+  class FeatureSignature:
+      """
+      Спектральная сигнатура на пространстве фич.
+      """
+      reference_features: np.ndarray
+
+      def distance_l2(self, other_features: np.ndarray) -> float:
+          if other_features.shape != self.reference_features.shape:
+              raise ValueError("Feature vector shape mismatch")
+          diff = self.reference_features - other_features
+          return float(np.sqrt(np.sum(diff**2)))
   ```
+
+- [ ] Добавить тесты в `tests/test_material.py`:
+
+  * `test_feature_signature_zero_distance_for_identical`;
+  * `test_feature_signature_shape_mismatch_raises`.
+
+### 22.3. HealthProfile с двумя уровнями
+
+- [ ] Обновить `HealthProfile` так, чтобы он мог хранить **оба типа** сигнатур:
+
+  ```python
+  @dataclass
+  class HealthProfile:
+      signatures: dict[str, MaterialSignature]
+      feature_signatures: dict[str, FeatureSignature] | None = None
+  ```
+
+- [ ] Добавить метод:
+
+  ```python
+  def score_features(
+      self,
+      current: dict[str, Spectrum1D],
+      bands_hz: dict[str, list[tuple[float, float]]],
+  ) -> dict[str, float]:
+      """
+      Для каждого канала:
+      - извлечь фичи,
+      - посчитать L2-дистанцию в пространстве фич.
+      """
+  ```
+
+- [ ] Добавить тест в `tests/test_material.py`, который:
+
+  * строит простые спектры;
+  * создаёт `FeatureSignature`;
+  * проверяет, что `score_features` возвращает корректный словарь.
 
 ---
 
-```
+## ЭТАП 23. Полный демо-кейс: от генерации данных до отчёта
 
-Скажи своему локальному ИИ:
+**Цель:** Один сценарий, который можно описать в README: *«запусти эти команды — и получишь отчёт о состоянии виртуального насоса».*
 
-> «Выполняй ЭТАП 8–10 в AI_TASKS.md».
+**Файлы:** `README.md`, `examples/health_monitor_demo.ipynb`, возможно новый `examples/pump_health_demo.ipynb`.
 
-Потом, когда он это доделает, ты скинешь мне обновку (или просто скажешь «этапы готовы»), и мы перейдём к **следующему уровню**:
+- [ ] Обновить или создать ноутбук `examples/health_monitor_demo.ipynb` так, чтобы он делал:
 
-- добавим ещё один тип среды (2D сетка / мембрана),
-- сделаем первый **реально полезный пример**:  
-  например, «Спектральная подпись двух разных материалов» (это уже шаг к геофизике / дефектоскопии).
+  1. `!python examples/generate_synthetic_pump_data.py`
+  2. `!spectral-health train --config configs/pump_train.yaml --out data/pump/profile.npz`
+  3. `!spectral-health score --config configs/pump_score.yaml --profile data/pump/profile.npz --thresholds configs/pump_thresholds.yaml --report data/pump/report.md`
+  4. В конце ноутбука открыть и показать `report.md`.
 
-Ты сейчас сделал очень важное: у тебя появился **минимальный, но реальный спектральный движок**. Это уже не сказка, а инструмент.
-::contentReference[oaicite:0]{index=0}
-```
+- [ ] Дополнить `README.md` разделом **"Quick start: Pump demo"**:
+
+  ```markdown
+  ## Quick start: Pump health demo
+
+  ```bash
+  pip install -e .
+
+  # 1. Сгенерировать синтетические данные
+  python examples/generate_synthetic_pump_data.py
+
+  # 2. Обучить профиль "здорового" состояния
+  spectral-health train \
+    --config configs/pump_train.yaml \
+    --out data/pump/profile.npz
+
+  # 3. Оценить текущее состояние и получить отчёт
+  spectral-health score \
+    --config configs/pump_score.yaml \
+    --profile data/pump/profile.npz \
+    --thresholds configs/pump_thresholds.yaml \
+    --report data/pump/report.md
+  ```
+  ```
+
+- [ ] Убедиться, что в отчёте есть как минимум:
+
+  * таблица с каналами, distance, threshold, статусом (уже делает `generate_markdown_report`) 
+  * понятный текст: "All systems nominal" или "Anomalies detected!"

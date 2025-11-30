@@ -119,3 +119,36 @@ def test_load_spectrum_npz_missing_keys():
             load_spectrum_npz(temp_path)
     finally:
         Path(temp_path).unlink()
+
+
+def test_save_load_health_profile_roundtrip():
+    """Test save and load health profile roundtrip."""
+    from spectral_physics.material import HealthProfile, MaterialSignature
+    from spectral_physics.io import save_health_profile, load_health_profile
+    
+    omega = np.array([1.0, 2.0])
+    power = np.array([1.0, 1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    sig = MaterialSignature(reference=spec)
+    
+    profile = HealthProfile(signatures={"ch1": sig, "ch2": sig})
+    
+    with tempfile.NamedTemporaryFile(suffix='.npz', delete=False) as f:
+        temp_path = f.name
+        
+    try:
+        save_health_profile(profile, temp_path)
+        
+        loaded = load_health_profile(temp_path)
+        
+        assert "ch1" in loaded.signatures
+        assert "ch2" in loaded.signatures
+        
+        # Check content
+        np.testing.assert_array_equal(
+            loaded.signatures["ch1"].reference.power,
+            power
+        )
+    finally:
+        Path(temp_path).unlink()
+

@@ -61,14 +61,24 @@ SpectralPhysics-Lab/
 │     ├─ __init__.py
 │     ├─ root_finding.py        # симметричный Ньютон и обёртки
 │     ├─ spectrum.py            # классы спектров и спектральных операций
-│     ├─ medium_1d.py           # 1D модель среды (цепочка осцилляторов)
-│     ├─ grav_toy.py            # простая спектральная "гравитация"
-│     └─ utils.py               # вспомогательные функции
-├─ examples/
-│  ├─ symmetric_newton_demo.ipynb
-│  ├─ spectrum_demo.ipynb
-│  └─ medium_oscillators_demo.ipynb
-└─ tests/
-   ├─ test_root_finding.py
-   ├─ test_spectrum.py
-   └─ test_medium_1d.py
+## Use-case: Вибродиагностика
+
+1. **Сбор данных**: Собираем логи "здорового" состояния машины (CSV по нескольким каналам).
+2. **Обучение**: Запускаем `spectral-health train --config config.yaml --out profile.npz`.
+3. **Мониторинг**: Регулярно запускаем:
+   ```bash
+   spectral-health score \
+     --config config_live.yaml \
+     --profile profile.npz \
+     --thresholds thresholds.yaml \
+     --report report.md
+   ```
+4. **Анализ**: Смотрим статус по каждому каналу (OK / ANOMALY) и читаем Markdown-отчёт.
+
+## Installation
+
+```bash
+pip install -e .
+spectral-health --help
+```
+

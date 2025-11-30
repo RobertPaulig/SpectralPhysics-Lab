@@ -1,6 +1,6 @@
 ================================================================================
 ПРОЕКТ: SpectralPhysics-Lab
-Дата создания архива: 2025-11-30 05:36:13
+Дата создания архива: 2025-11-30 14:36:13
 ================================================================================
 
 СТРУКТУРА ПРОЕКТА:
@@ -19,6 +19,7 @@ SpectralPhysics-Lab
 │       ├── io.py
 │       ├── material.py
 │       ├── medium_1d.py
+│       ├── report.py
 │       ├── root_finding.py
 │       ├── spectrum.py
 │       └── timeseries.py
@@ -28,6 +29,7 @@ SpectralPhysics-Lab
 │   ├── test_io.py
 │   ├── test_material.py
 │   ├── test_medium_1d.py
+│   ├── test_report.py
 │   ├── test_root_finding.py
 │   ├── test_spectrum.py
 │   └── test_timeseries.py
@@ -363,21 +365,6 @@ build-backend = "setuptools.build_meta"
 name = "spectral-physics-lab"
 version = "0.1.0"
 description = "Experimental spectral physics toolkit for diagnostics and anomaly detection"
-readme = "README.md"
-requires-python = ">=3.11"
-authors = [
-    {name = "SpectralPhysics Team"}
-]
-dependencies = [
-    "numpy>=1.24.0",
-    "scipy>=1.10.0",
-    "matplotlib>=3.7.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "jupyter>=1.0.0",
     "notebook>=6.5.0",
 ]
 
@@ -459,6 +446,69 @@ SpectralPhysics-Lab/
 │     ├─ __init__.py
 │     ├─ root_finding.py        # симметричный Ньютон и обёртки
 │     ├─ spectrum.py            # классы спектров и спектральных операций
+# SpectralPhysics-Lab
+
+**SpectralPhysics-Lab** — это экспериментальный кодовый стенд для новой "спектральной физики":
+
+- Вместо шариков и сил: **Среда** и **колебательные режимы** (моды).
+- Вместо "масса тянет массу": **спектральная тень** и **давление фонового поля**.
+- Вместо магии квантовой механики: **устойчивые резонаторы** (солитоны) в единой Среде.
+
+Цель репозитория — собрать **рабочий набор инструментов**, с которым можно:
+
+- моделировать простейшие "среды" и солитоны;
+- считать спектры (частотные распределения, локальную плотность состояний);
+- играться с "маской" (эффективная масса, гравитация, валентность) как с **спектральными объектами**;
+- готовить основу для прикладных задач (диагностика машин, геофизика, тт.д.).
+
+> Важно: это не "красивая теория на бумаге", а песочница,
+> где любая идея должна доползти до **работающего кода / эксперимента**.
+
+---
+
+## Текущий технический фокус
+
+1. **Базовая математика**  
+   - Реализация *симметричного метода Ньютона* для поиска корней
+     нелинейных уравнений и систем **без явных производных**.
+   - Обёртки для устойчивого решения задач "подбор параметров модели под данные".
+
+2. **Спектральные представления**
+   - Классы для описания 1D-спектров (частоты, амплитуды, фазы).
+   - Простейшая модель *локальной спектральной плотности* `rho_spec(x, ω)`
+     в дискретном виде (сетка по x и по частоте).
+
+3. **Простые физические игрушки (toy models)**
+   - 1D-цепочка осцилляторов (упругая Среда).
+   - Спектральный анализ нормальных мод (моды колебаний цепочки).
+   - Простейшая "гравитационная" модель как **дисбаланс спектра**:
+     влияние "прозрачности" материала на эффективное "ускорение".
+
+---
+
+## Язык и стек
+
+- Язык: **Python 3.11+**
+- Библиотеки:
+  - `numpy`
+  - `scipy`
+  - `matplotlib` (для графиков)
+  - (`pytest` для тестов — позже)
+
+---
+
+## Планируемая структура репозитория
+
+```text
+SpectralPhysics-Lab/
+├─ README.md                # этот файл
+├─ AI_TASKS.md              # задания для ИИ-ассистента
+├─ pyproject.toml / setup.cfg (позже)  # упаковка проекта как библиотеки
+├─ src/
+│  └─ spectral_physics/
+│     ├─ __init__.py
+│     ├─ root_finding.py        # симметричный Ньютон и обёртки
+│     ├─ spectrum.py            # классы спектров и спектральных операций
 │     ├─ medium_1d.py           # 1D модель среды (цепочка осцилляторов)
 │     ├─ grav_toy.py            # простая спектральная "гравитация"
 │     └─ utils.py               # вспомогательные функции
@@ -466,10 +516,26 @@ SpectralPhysics-Lab/
 │  ├─ symmetric_newton_demo.ipynb
 │  ├─ spectrum_demo.ipynb
 │  └─ medium_oscillators_demo.ipynb
+## Use-case: Вибродиагностика
+
+1. **Сбор данных**: Собираем логи "здорового" состояния машины (CSV по нескольким каналам).
+2. **Обучение**: Запускаем `spectral-health train --config config.yaml --out profile.npz`.
+3. **Мониторинг**: Регулярно запускаем:
+   ```bash
+   spectral-health score \
+     --config config_live.yaml \
+     --profile profile.npz \
+     --thresholds thresholds.yaml \
+     --report report.md
+   ```
+4. **Анализ**: Смотрим статус по каждому каналу (OK / ANOMALY) и читаем Markdown-отчёт.
+
+## Installation
 └─ tests/
    ├─ test_root_finding.py
    ├─ test_spectrum.py
    └─ test_medium_1d.py
+```
 
 
 
@@ -488,8 +554,24 @@ from .medium_1d import OscillatorChain1D
 from .grav_toy import spectral_pressure_difference
 from .material import MaterialSignature
 from .timeseries import timeseries_to_spectrum
-from .diagnostics import ChannelConfig, SpectralAnalyzer, HealthMonitor
-from .io import load_timeseries_csv, save_spectrum_npz, load_spectrum_npz
+from .diagnostics import (
+    ChannelConfig, 
+    MultiChannelConfig,
+    SpectralAnalyzer, 
+    HealthMonitor, 
+    build_health_profile,
+    average_spectrum,
+    spectral_band_power,
+    spectral_entropy
+)
+from .io import (
+    load_timeseries_csv, 
+    save_spectrum_npz, 
+    load_spectrum_npz,
+    save_health_profile,
+    load_health_profile
+)
+from .report import generate_markdown_report
 
 __all__ = [
     "symmetric_newton",
@@ -499,12 +581,21 @@ __all__ = [
     "MaterialSignature",
     "timeseries_to_spectrum",
     "ChannelConfig",
+    "MultiChannelConfig",
     "SpectralAnalyzer",
     "HealthMonitor",
+    "build_health_profile",
+    "average_spectrum",
+    "spectral_band_power",
+    "spectral_entropy",
     "load_timeseries_csv",
     "save_spectrum_npz",
     "load_spectrum_npz",
+    "save_health_profile",
+    "load_health_profile",
+    "generate_markdown_report",
 ]
+
 
 
 
@@ -515,118 +606,199 @@ __all__ = [
 
 import argparse
 import sys
-from .io import load_timeseries_csv, load_spectrum_npz
-from .diagnostics import ChannelConfig, SpectralAnalyzer, HealthMonitor
+import yaml
+from pathlib import Path
+from typing import Dict, List, Any
+
+from .io import load_timeseries_csv, save_health_profile, load_health_profile
+from .diagnostics import (
+    ChannelConfig, 
+    SpectralAnalyzer, 
+    build_health_profile,
+    HealthProfile
+)
+from .spectrum import Spectrum1D
+
+
+def load_config(path: str) -> Dict[str, Any]:
+    """Load YAML configuration."""
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def train_command(args):
+    """Execute training command."""
+    print(f"Loading config from {args.config}...")
+    config = load_config(args.config)
+    
+    dt = config.get('dt')
+    window = config.get('window', 'hann')
+    channels_conf = config.get('channels', {})
+    
+    if not channels_conf:
+        print("Error: No channels defined in config.")
+        return 1
+        
+    training_data: Dict[str, List[Spectrum1D]] = {}
+    
+    print(f"Processing {len(channels_conf)} channels...")
+    
+    for name, ch_data in channels_conf.items():
+        print(f"  Channel '{name}':")
+        column = ch_data.get('column', 0)
+        files = ch_data.get('files', [])
+        
+        # Create analyzer for this channel
+        ch_config = ChannelConfig(
+            name=name,
+            dt=dt,
+            window=window,
+            freq_min=ch_data.get('freq_min'),
+            freq_max=ch_data.get('freq_max')
+        )
+        analyzer = SpectralAnalyzer(ch_config)
+        
+        spectra = []
+        for file_path in files:
+            try:
+                print(f"    Loading {file_path}...", end='', flush=True)
+                signal = load_timeseries_csv(file_path, column=column)
+                spec = analyzer.analyze(signal)
+                spectra.append(spec)
+                print(" OK")
+            except Exception as e:
+                print(f" FAIL: {e}")
+        
+        if spectra:
+            training_data[name] = spectra
+        else:
+            print(f"    Warning: No valid data for channel '{name}'")
+
+    if not training_data:
+        print("Error: No training data collected.")
+        return 1
+        
+    print("Building health profile...")
+    profile = build_health_profile(training_data)
+    
+    print(f"Saving profile to {args.out}...")
+    save_health_profile(profile, args.out)
+    print("Done.")
+    return 0
+
+
+def score_command(args):
+    """Execute scoring command."""
+    print(f"Loading profile from {args.profile}...")
+    try:
+        profile = load_health_profile(args.profile)
+    except Exception as e:
+        print(f"Error loading profile: {e}")
+        return 2
+
+    print(f"Loading config from {args.config}...")
+    config = load_config(args.config)
+    
+    print(f"Loading thresholds from {args.thresholds}...")
+    thresholds = load_config(args.thresholds)
+    
+    dt = config.get('dt')
+    window = config.get('window', 'hann')
+    channels_conf = config.get('channels', {})
+    
+    current_spectra: Dict[str, Spectrum1D] = {}
+    
+    # Process current data (take first file from list or 'current' key)
+    for name, ch_data in channels_conf.items():
+        if name not in profile.signatures:
+            continue
+            
+        files = ch_data.get('files', [])
+        if not files:
+            continue
+            
+        # Use the last file as "current" state
+        file_path = files[-1]
+        column = ch_data.get('column', 0)
+        
+        ch_config = ChannelConfig(
+            name=name,
+            dt=dt,
+            window=window,
+            freq_min=ch_data.get('freq_min'),
+            freq_max=ch_data.get('freq_max')
+        )
+        analyzer = SpectralAnalyzer(ch_config)
+        
+        try:
+            signal = load_timeseries_csv(file_path, column=column)
+            spec = analyzer.analyze(signal)
+            current_spectra[name] = spec
+        except Exception as e:
+            print(f"Error processing channel {name}: {e}")
+
+    if not current_spectra:
+        print("Error: No current data to analyze.")
+        return 1
+
+    # Calculate scores
+    scores = profile.score(current_spectra)
+    anomalies = profile.is_anomalous(current_spectra, thresholds)
+    
+    # Generate report
+    print("\n" + "=" * 60)
+    print(f"{'Channel':<15} {'Distance':<12} {'Threshold':<12} {'Status':<10}")
+    print("-" * 60)
+    
+    any_anomaly = False
+    
+    for name in scores:
+        dist = scores[name]
+        thresh = thresholds.get(name, 0.0)
+        is_anom = anomalies.get(name, False)
+        status = "ANOMALY" if is_anom else "OK"
+        
+        if is_anom:
+            any_anomaly = True
+            
+        print(f"{name:<15} {dist:.6f}     {thresh:.6f}     {status:<10}")
+        
+    print("=" * 60)
+    
+    if args.report:
+        from .report import generate_markdown_report
+        print(f"Generating report: {args.report}")
+        generate_markdown_report(scores, thresholds, args.report)
+
+    return 1 if any_anomaly else 0
 
 
 def main():
-    """
-    CLI для одноканальной спектральной диагностики (норма/аномалия).
-    """
     parser = argparse.ArgumentParser(
-        description="Одноканальная спектральная диагностика (норма/аномалия).",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description="Spectral Health: Multi-channel diagnostics engine"
     )
-    parser.add_argument(
-        "--signal",
-        required=True,
-        help="Путь к CSV с сигналом"
-    )
-    parser.add_argument(
-        "--ref",
-        required=True,
-        help="Путь к .npz файлу эталонного спектра"
-    )
-    parser.add_argument(
-        "--dt",
-        type=float,
-        required=True,
-        help="Шаг по времени (сек)"
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        required=True,
-        help="Порог аномалии"
-    )
-    parser.add_argument(
-        "--column",
-        type=int,
-        default=0,
-        help="Индекс колонки сигнала в CSV"
-    )
-    parser.add_argument(
-        "--freq-min",
-        type=float,
-        default=None,
-        help="Мин. частота анализа (Гц)"
-    )
-    parser.add_argument(
-        "--freq-max",
-        type=float,
-        default=None,
-        help="Макс. частота анализа (Гц)"
-    )
-    parser.add_argument(
-        "--window",
-        type=str,
-        default="hann",
-        help="Окно для FFT ('hann' или 'none')"
-    )
+    subparsers = parser.add_subparsers(dest='command', required=True)
+    
+    # Train command
+    parser_train = subparsers.add_parser('train', help='Train health profile')
+    parser_train.add_argument('--config', required=True, help='Path to config.yaml')
+    parser_train.add_argument('--out', required=True, help='Output path for profile.npz')
+    parser_train.set_defaults(func=train_command)
+    
+    # Score command
+    parser_score = subparsers.add_parser('score', help='Score current data against profile')
+    parser_score.add_argument('--config', required=True, help='Path to config.yaml')
+    parser_score.add_argument('--profile', required=True, help='Path to profile.npz')
+    parser_score.add_argument('--thresholds', required=True, help='Path to thresholds.yaml')
+    parser_score.add_argument('--report', help='Path to output markdown report')
+    parser_score.set_defaults(func=score_command)
     
     args = parser.parse_args()
-
-    try:
-        # 1. Загрузка сигнала
-        print(f"Загрузка сигнала из {args.signal}...")
-        signal = load_timeseries_csv(args.signal, column=args.column, skip_header=True)
-        print(f"  Загружено {len(signal)} отсчётов")
-
-        # 2. Конфиг канала и анализ
-        window_value = None if args.window.lower() == "none" else args.window
-        
-        config = ChannelConfig(
-            name="channel-0",
-            dt=args.dt,
-            window=window_value,
-            freq_min=args.freq_min,
-            freq_max=args.freq_max,
-        )
-        
-        print(f"Анализ спектра (dt={args.dt}, window={window_value})...")
-        analyzer = SpectralAnalyzer(config=config)
-        current_spectrum = analyzer.analyze(signal)
-        print(f"  Спектр содержит {len(current_spectrum.omega)} частотных компонент")
-
-        # 3. Загрузка эталонного спектра
-        print(f"Загрузка эталонного спектра из {args.ref}...")
-        reference = load_spectrum_npz(args.ref)
-        print(f"  Эталонный спектр содержит {len(reference.omega)} частотных компонент")
-
-        # 4. Мониторинг
-        print(f"Сравнение с эталоном (threshold={args.threshold})...")
-        monitor = HealthMonitor(reference=reference, threshold=args.threshold)
-        score = monitor.score(current_spectrum)
-        is_anom = monitor.is_anomalous(current_spectrum)
-
-        # 5. Вывод результата
-        print("\n" + "=" * 60)
-        status = "ANOMALY" if is_anom else "OK"
-        print(f"Status: {status}")
-        print(f"Score (L2 distance): {score:.6f}")
-        print(f"Threshold: {args.threshold:.6f}")
-        print("=" * 60)
-        
-        # Exit code: 0 для OK, 1 для ANOMALY
-        return 1 if is_anom else 0
-        
-    except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 2
+    sys.exit(args.func(args))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
 
 
 
@@ -658,6 +830,15 @@ class ChannelConfig:
     window: str = "hann"
     freq_min: float | None = None
     freq_max: float | None = None
+
+
+@dataclass
+class MultiChannelConfig:
+    """
+    Конфигурация системы с несколькими каналами.
+    """
+    channels: dict[str, ChannelConfig]
+
 
 
 class SpectralAnalyzer:
@@ -752,6 +933,119 @@ class HealthMonitor:
             True если аномален, False иначе.
         """
         return self.signature.is_anomalous(current, self.threshold)
+
+
+def average_spectrum(spectra: list[Spectrum1D]) -> Spectrum1D:
+    """
+    Усреднить несколько спектров с одинаковой частотной сеткой.
+
+    Args:
+        spectra: Список спектров.
+
+    Returns:
+        Новый Spectrum1D с усредненной мощностью.
+    
+    Raises:
+        ValueError: Если список пуст или сетки частот не совпадают.
+    """
+    if not spectra:
+        raise ValueError("Cannot average empty list of spectra")
+    
+    # Берем первый спектр как эталон сетки
+    omega_ref = spectra[0].omega
+    n_points = len(omega_ref)
+    
+    sum_power = np.zeros_like(spectra[0].power)
+    
+    for i, spec in enumerate(spectra):
+        if len(spec.omega) != n_points or not np.allclose(spec.omega, omega_ref):
+            raise ValueError(
+                f"Spectrum at index {i} has different frequency grid"
+            )
+        sum_power += spec.power
+        
+    avg_power = sum_power / len(spectra)
+    
+    return Spectrum1D(omega=omega_ref.copy(), power=avg_power)
+
+
+def build_health_profile(
+    training_data: dict[str, list[Spectrum1D]]
+) -> "HealthProfile":
+    """
+    Построить HealthProfile по обучающим данным.
+
+    Args:
+        training_data: Словарь {имя_канала: список_спектров}.
+
+    Returns:
+        HealthProfile с усредненными сигнатурами.
+    """
+    from .material import HealthProfile, MaterialSignature
+    
+    signatures = {}
+    
+    for channel_name, spectra_list in training_data.items():
+        if not spectra_list:
+            continue
+            
+        # 1. Усредняем спектры
+        avg_spec = average_spectrum(spectra_list)
+        
+        # 2. Создаем сигнатуру
+        signature = MaterialSignature(reference=avg_spec)
+        
+        # 3. Сохраняем
+        signatures[channel_name] = signature
+        
+    return HealthProfile(signatures=signatures)
+
+
+def spectral_band_power(
+    spectrum: Spectrum1D,
+    freq_min: float,
+    freq_max: float,
+) -> float:
+    """
+    Энергия спектра в диапазоне [freq_min, freq_max] (Гц).
+    
+    Args:
+        spectrum: Спектр для анализа.
+        freq_min: Минимальная частота (Гц).
+        freq_max: Максимальная частота (Гц).
+    
+    Returns:
+        Суммарная мощность в полосе.
+    """
+    freq_hz = spectrum.omega / (2 * np.pi)
+    mask = (freq_hz >= freq_min) & (freq_hz <= freq_max)
+    return float(np.sum(spectrum.power[mask]))
+
+
+def spectral_entropy(spectrum: Spectrum1D) -> float:
+    """
+    Спектральная энтропия: H = - sum(p_i * log(p_i)),
+    где p_i = нормированная мощность.
+    
+    Args:
+        spectrum: Спектр для анализа.
+    
+    Returns:
+        Значение энтропии.
+    """
+    total = spectrum.total_power()
+    if total == 0:
+        return 0.0
+    
+    # Нормируем мощность (как вероятность)
+    p = spectrum.power / total
+    
+    # Исключаем нули для логарифма
+    p = p[p > 0]
+    
+    return float(-np.sum(p * np.log(p)))
+
+
 
 
 
@@ -930,6 +1224,64 @@ def load_spectrum_npz(path: str) -> Spectrum1D:
     return Spectrum1D(omega=omega, power=power)
 
 
+def save_health_profile(profile: "HealthProfile", path: str) -> None:
+    """
+    Сохранить HealthProfile в .npz.
+    
+    Args:
+        profile: Профиль для сохранения.
+        path: Путь к файлу .npz.
+    """
+    data = {}
+    channel_names = []
+    
+    for name, signature in profile.signatures.items():
+        channel_names.append(name)
+        data[f"{name}_omega"] = signature.reference.omega
+        data[f"{name}_power"] = signature.reference.power
+        
+    np.savez(path, channels=channel_names, **data)
+
+
+def load_health_profile(path: str) -> "HealthProfile":
+    """
+    Загрузить HealthProfile из .npz.
+    
+    Args:
+        path: Путь к файлу .npz.
+    
+    Returns:
+        Загруженный HealthProfile.
+    """
+    from .material import HealthProfile, MaterialSignature
+    
+    path_obj = Path(path)
+    if not path_obj.exists():
+        raise ValueError(f"File not found: {path}")
+        
+    try:
+        data = np.load(path)
+    except Exception as e:
+        raise ValueError(f"Failed to load .npz file {path}: {e}")
+        
+    if 'channels' not in data:
+        raise ValueError(f"File {path} is not a valid HealthProfile (missing 'channels')")
+        
+    signatures = {}
+    for name in data['channels']:
+        omega_key = f"{name}_omega"
+        power_key = f"{name}_power"
+        
+        if omega_key not in data or power_key not in data:
+            raise ValueError(f"Missing data for channel {name}")
+            
+        spec = Spectrum1D(omega=data[omega_key], power=data[power_key])
+        signatures[str(name)] = MaterialSignature(reference=spec)
+        
+    return HealthProfile(signatures=signatures)
+
+
+
 
 ================================================================================
 ФАЙЛ: src\spectral_physics\material.py
@@ -990,7 +1342,40 @@ class MaterialSignature:
         
         return float(distance)
     
+    def distance_cosine(self, other: Spectrum1D) -> float:
+        """
+        Косинусная "дистанция" между нормированными спектрами:
+            1 - (⟨a,b⟩ / (||a|| * ||b||))
+        
+        Args:
+            other: Спектр для сравнения.
+        
+        Returns:
+            Косинусное расстояние (0..1 для неотрицательных спектров).
+        """
+        if not np.array_equal(self.reference.omega, other.omega):
+            raise ValueError("Frequency grids do not match")
+        
+        # Работаем с векторами мощности
+        a = self.reference.power
+        b = other.power
+        
+        norm_a = np.linalg.norm(a)
+        norm_b = np.linalg.norm(b)
+        
+        if norm_a == 0 or norm_b == 0:
+            # Если один из векторов нулевой, расстояние неопределено (или макс)
+            return 1.0
+            
+        cosine_similarity = np.dot(a, b) / (norm_a * norm_b)
+        
+        # Ограничиваем [0, 1] для стабильности
+        cosine_similarity = np.clip(cosine_similarity, 0.0, 1.0)
+        
+        return 1.0 - cosine_similarity
+
     def is_anomalous(self, other: Spectrum1D, threshold: float) -> bool:
+
         """
         Вернуть True, если distance_l2(other) > threshold.
         
@@ -1011,6 +1396,41 @@ class MaterialSignature:
         """
         distance = self.distance_l2(other)
         return distance > threshold
+
+
+@dataclass
+class HealthProfile:
+    """
+    Эталонный профиль "здорового" состояния для нескольких каналов.
+    """
+    signatures: dict[str, MaterialSignature]  # имя канала -> подпись
+
+    def score(self, current: dict[str, Spectrum1D]) -> dict[str, float]:
+        """
+        Вернуть словарь name -> distance_l2 для каждого канала.
+        Канал присутствует в signatures и в current.
+        """
+        scores = {}
+        for name, signature in self.signatures.items():
+            if name in current:
+                scores[name] = signature.distance_l2(current[name])
+        return scores
+
+    def is_anomalous(
+        self,
+        current: dict[str, Spectrum1D],
+        thresholds: dict[str, float],
+    ) -> dict[str, bool]:
+        """
+        Вернуть словарь name -> bool (аномален / нет)
+        по индивидуальным порогам для каждого канала.
+        """
+        results = {}
+        for name, signature in self.signatures.items():
+            if name in current and name in thresholds:
+                results[name] = signature.is_anomalous(current[name], thresholds[name])
+        return results
+
 
 
 
@@ -1106,6 +1526,69 @@ class OscillatorChain1D:
         omega = np.sqrt(eigenvalues / self.m)
         
         return omega, eigenvectors
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\report.py
+================================================================================
+
+from typing import Dict
+import datetime
+
+def generate_markdown_report(
+    scores: Dict[str, float],
+    thresholds: Dict[str, float],
+    out_path: str,
+    title: str = "Spectral Health Report",
+) -> None:
+    """
+    Сохранить markdown-файл с таблицей по каналам.
+    
+    Args:
+        scores: Словарь {имя_канала: дистанция}.
+        thresholds: Словарь {имя_канала: порог}.
+        out_path: Путь для сохранения отчета.
+        title: Заголовок отчета.
+    """
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    lines = [
+        f"# {title}",
+        f"",
+        f"**Date:** {timestamp}",
+        f"",
+        f"## Channel Status",
+        f"",
+        f"| Channel | Distance | Threshold | Status |",
+        f"|---------|----------|-----------|--------|"
+    ]
+    
+    any_anomaly = False
+    
+    for name, distance in scores.items():
+        threshold = thresholds.get(name, 0.0)
+        is_anom = distance > threshold
+        status = "🔴 **ANOMALY**" if is_anom else "🟢 OK"
+        
+        if is_anom:
+            any_anomaly = True
+            
+        lines.append(
+            f"| `{name}` | {distance:.6f} | {threshold:.6f} | {status} |"
+        )
+        
+    lines.append("")
+    
+    if any_anomaly:
+        lines.append("> [!WARNING]")
+        lines.append("> Anomalies detected! Please check the affected channels.")
+    else:
+        lines.append("> [!NOTE]")
+        lines.append("> All systems nominal.")
+        
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines))
 
 
 
@@ -1561,6 +2044,115 @@ def test_spectral_analyzer_window_none():
     assert len(spectrum.power) > 0
 
 
+def test_average_spectrum_basic():
+    """Test averaging two identical spectra."""
+    from spectral_physics.diagnostics import average_spectrum
+    
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 1.0])
+    
+    spec1 = Spectrum1D(omega=omega, power=power)
+    spec2 = Spectrum1D(omega=omega, power=power)
+    
+    avg = average_spectrum([spec1, spec2])
+    
+    np.testing.assert_array_equal(avg.omega, omega)
+    np.testing.assert_array_equal(avg.power, power)
+
+
+def test_average_spectrum_different_power():
+    """Test averaging spectra with different powers."""
+    from spectral_physics.diagnostics import average_spectrum
+    
+    omega = np.array([1.0, 2.0])
+    spec1 = Spectrum1D(omega=omega, power=np.array([1.0, 1.0]))
+    spec2 = Spectrum1D(omega=omega, power=np.array([3.0, 3.0]))
+    
+    avg = average_spectrum([spec1, spec2])
+    
+    # Average of 1 and 3 is 2
+    expected = np.array([2.0, 2.0])
+    np.testing.assert_array_equal(avg.power, expected)
+
+
+def test_average_spectrum_mismatch():
+    """Test that averaging spectra with different grids raises ValueError."""
+    from spectral_physics.diagnostics import average_spectrum
+    
+    spec1 = Spectrum1D(omega=np.array([1.0]), power=np.array([1.0]))
+    spec2 = Spectrum1D(omega=np.array([2.0]), power=np.array([1.0]))
+    
+    with pytest.raises(ValueError, match="different frequency grid"):
+        average_spectrum([spec1, spec2])
+
+
+def test_build_health_profile_simple():
+    """Test building health profile from training data."""
+    from spectral_physics.diagnostics import build_health_profile
+    
+    omega = np.array([1.0, 2.0])
+    power = np.array([1.0, 1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    training_data = {
+        "ch1": [spec, spec],
+        "ch2": [spec, spec]
+    }
+    
+    profile = build_health_profile(training_data)
+    
+    assert "ch1" in profile.signatures
+    assert "ch2" in profile.signatures
+    
+    # Check that signatures are correct (distance to original should be 0)
+    scores = profile.score({"ch1": spec, "ch2": spec})
+    assert scores["ch1"] < 1e-10
+    assert scores["ch2"] < 1e-10
+
+
+def test_spectral_band_power():
+    """Test spectral band power calculation."""
+    from spectral_physics.diagnostics import spectral_band_power
+    
+    # 10 Hz and 100 Hz
+    omega = np.array([2*np.pi*10, 2*np.pi*100])
+    power = np.array([1.0, 2.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    # Band covering only 10 Hz
+    p1 = spectral_band_power(spec, freq_min=5, freq_max=15)
+    assert abs(p1 - 1.0) < 1e-10
+    
+    # Band covering only 100 Hz
+    p2 = spectral_band_power(spec, freq_min=90, freq_max=110)
+    assert abs(p2 - 2.0) < 1e-10
+    
+    # Band covering both
+    p3 = spectral_band_power(spec, freq_min=0, freq_max=200)
+    assert abs(p3 - 3.0) < 1e-10
+
+
+def test_spectral_entropy():
+    """Test spectral entropy calculation."""
+    from spectral_physics.diagnostics import spectral_entropy
+    
+    omega = np.array([1.0, 2.0, 3.0])
+    
+    # Uniform spectrum (max entropy)
+    spec_uniform = Spectrum1D(omega=omega, power=np.array([1.0, 1.0, 1.0]))
+    h_uniform = spectral_entropy(spec_uniform)
+    
+    # Peaked spectrum (lower entropy)
+    spec_peaked = Spectrum1D(omega=omega, power=np.array([0.0, 10.0, 0.0]))
+    h_peaked = spectral_entropy(spec_peaked)
+    
+    assert h_uniform > h_peaked
+    # For single peak, entropy should be 0 (-1*log(1))
+    assert abs(h_peaked) < 1e-10
+
+
+
+
 
 ================================================================================
 ФАЙЛ: tests\test_grav_toy.py
@@ -1810,6 +2402,39 @@ def test_load_spectrum_npz_missing_keys():
         Path(temp_path).unlink()
 
 
+def test_save_load_health_profile_roundtrip():
+    """Test save and load health profile roundtrip."""
+    from spectral_physics.material import HealthProfile, MaterialSignature
+    from spectral_physics.io import save_health_profile, load_health_profile
+    
+    omega = np.array([1.0, 2.0])
+    power = np.array([1.0, 1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    sig = MaterialSignature(reference=spec)
+    
+    profile = HealthProfile(signatures={"ch1": sig, "ch2": sig})
+    
+    with tempfile.NamedTemporaryFile(suffix='.npz', delete=False) as f:
+        temp_path = f.name
+        
+    try:
+        save_health_profile(profile, temp_path)
+        
+        loaded = load_health_profile(temp_path)
+        
+        assert "ch1" in loaded.signatures
+        assert "ch2" in loaded.signatures
+        
+        # Check content
+        np.testing.assert_array_equal(
+            loaded.signatures["ch1"].reference.power,
+            power
+        )
+    finally:
+        Path(temp_path).unlink()
+
+
+
 
 ================================================================================
 ФАЙЛ: tests\test_material.py
@@ -1939,6 +2564,75 @@ def test_distance_normalized():
     
     # Should be zero since normalized shapes are identical
     assert abs(distance) < 1e-10
+
+
+def test_health_profile_score_identity():
+    """Test HealthProfile score with identical spectra."""
+    from spectral_physics.material import HealthProfile
+    
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    sig = MaterialSignature(reference=spec)
+    profile = HealthProfile(signatures={"ch1": sig, "ch2": sig})
+    
+    current = {"ch1": spec, "ch2": spec}
+    scores = profile.score(current)
+    
+    assert scores["ch1"] < 1e-10
+    assert scores["ch2"] < 1e-10
+
+
+def test_health_profile_is_anomalous_mixed():
+    """Test HealthProfile with mixed anomalous/normal channels."""
+    from spectral_physics.material import HealthProfile
+    
+    omega = np.array([1.0, 2.0, 3.0])
+    power_ref = np.array([1.0, 2.0, 1.0])
+    power_anom = np.array([5.0, 0.5, 3.0])
+    
+    spec_ref = Spectrum1D(omega=omega, power=power_ref)
+    spec_anom = Spectrum1D(omega=omega, power=power_anom)
+    
+    sig = MaterialSignature(reference=spec_ref)
+    profile = HealthProfile(signatures={"ch1": sig, "ch2": sig})
+    
+    current = {"ch1": spec_ref, "ch2": spec_anom}
+    thresholds = {"ch1": 0.1, "ch2": 0.1}
+    
+    results = profile.is_anomalous(current, thresholds)
+    
+    assert results["ch1"] is False
+    assert results["ch2"] is True
+
+
+def test_distance_cosine_identical():
+    """Test cosine distance for identical spectra."""
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    sig = MaterialSignature(reference=spec)
+    dist = sig.distance_cosine(spec)
+    
+    assert abs(dist) < 1e-10
+
+
+def test_distance_cosine_orthogonal():
+    """Test cosine distance for orthogonal-like spectra."""
+    omega = np.array([1.0, 2.0])
+    
+    spec1 = Spectrum1D(omega=omega, power=np.array([1.0, 0.0]))
+    spec2 = Spectrum1D(omega=omega, power=np.array([0.0, 1.0]))
+    
+    sig = MaterialSignature(reference=spec1)
+    dist = sig.distance_cosine(spec2)
+    
+    # Cosine similarity is 0, so distance is 1 - 0 = 1
+    assert abs(dist - 1.0) < 1e-10
+
+
 
 
 
@@ -2074,6 +2768,59 @@ def test_different_parameters():
     
     # Heavier chain should have lower frequencies
     assert np.all(omega3 < omega1)
+
+
+
+================================================================================
+ФАЙЛ: tests\test_report.py
+================================================================================
+
+import tempfile
+import pytest
+from pathlib import Path
+from spectral_physics.report import generate_markdown_report
+
+def test_generate_markdown_report_basic():
+    """Test basic report generation."""
+    scores = {"ch1": 0.05, "ch2": 0.25}
+    thresholds = {"ch1": 0.1, "ch2": 0.2}
+    
+    with tempfile.NamedTemporaryFile(suffix='.md', delete=False) as f:
+        temp_path = f.name
+        
+    try:
+        generate_markdown_report(scores, thresholds, temp_path)
+        
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        assert "# Spectral Health Report" in content
+        assert "| `ch1` | 0.050000 | 0.100000 | 🟢 OK |" in content
+        assert "| `ch2` | 0.250000 | 0.200000 | 🔴 **ANOMALY** |" in content
+        assert "Anomalies detected!" in content
+        
+    finally:
+        Path(temp_path).unlink()
+
+def test_generate_markdown_report_all_ok():
+    """Test report generation when everything is OK."""
+    scores = {"ch1": 0.05}
+    thresholds = {"ch1": 0.1}
+    
+    with tempfile.NamedTemporaryFile(suffix='.md', delete=False) as f:
+        temp_path = f.name
+        
+    try:
+        generate_markdown_report(scores, thresholds, temp_path)
+        
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        assert "All systems nominal" in content
+        assert "Anomalies detected!" not in content
+        
+    finally:
+        Path(temp_path).unlink()
 
 
 

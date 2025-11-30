@@ -24,6 +24,15 @@ class ChannelConfig:
     freq_max: float | None = None
 
 
+@dataclass
+class MultiChannelConfig:
+    """
+    Конфигурация системы с несколькими каналами.
+    """
+    channels: dict[str, ChannelConfig]
+
+
+
 class SpectralAnalyzer:
     """
     Инструмент: временной ряд -> спектр -> обрезка по диапазону частот.
@@ -116,3 +125,116 @@ class HealthMonitor:
             True если аномален, False иначе.
         """
         return self.signature.is_anomalous(current, self.threshold)
+
+
+def average_spectrum(spectra: list[Spectrum1D]) -> Spectrum1D:
+    """
+    Усреднить несколько спектров с одинаковой частотной сеткой.
+
+    Args:
+        spectra: Список спектров.
+
+    Returns:
+        Новый Spectrum1D с усредненной мощностью.
+    
+    Raises:
+        ValueError: Если список пуст или сетки частот не совпадают.
+    """
+    if not spectra:
+        raise ValueError("Cannot average empty list of spectra")
+    
+    # Берем первый спектр как эталон сетки
+    omega_ref = spectra[0].omega
+    n_points = len(omega_ref)
+    
+    sum_power = np.zeros_like(spectra[0].power)
+    
+    for i, spec in enumerate(spectra):
+        if len(spec.omega) != n_points or not np.allclose(spec.omega, omega_ref):
+            raise ValueError(
+                f"Spectrum at index {i} has different frequency grid"
+            )
+        sum_power += spec.power
+        
+    avg_power = sum_power / len(spectra)
+    
+    return Spectrum1D(omega=omega_ref.copy(), power=avg_power)
+
+
+def build_health_profile(
+    training_data: dict[str, list[Spectrum1D]]
+) -> "HealthProfile":
+    """
+    Построить HealthProfile по обучающим данным.
+
+    Args:
+        training_data: Словарь {имя_канала: список_спектров}.
+
+    Returns:
+        HealthProfile с усредненными сигнатурами.
+    """
+    from .material import HealthProfile, MaterialSignature
+    
+    signatures = {}
+    
+    for channel_name, spectra_list in training_data.items():
+        if not spectra_list:
+            continue
+            
+        # 1. Усредняем спектры
+        avg_spec = average_spectrum(spectra_list)
+        
+        # 2. Создаем сигнатуру
+        signature = MaterialSignature(reference=avg_spec)
+        
+        # 3. Сохраняем
+        signatures[channel_name] = signature
+        
+    return HealthProfile(signatures=signatures)
+
+
+def spectral_band_power(
+    spectrum: Spectrum1D,
+    freq_min: float,
+    freq_max: float,
+) -> float:
+    """
+    Энергия спектра в диапазоне [freq_min, freq_max] (Гц).
+    
+    Args:
+        spectrum: Спектр для анализа.
+        freq_min: Минимальная частота (Гц).
+        freq_max: Максимальная частота (Гц).
+    
+    Returns:
+        Суммарная мощность в полосе.
+    """
+    freq_hz = spectrum.omega / (2 * np.pi)
+    mask = (freq_hz >= freq_min) & (freq_hz <= freq_max)
+    return float(np.sum(spectrum.power[mask]))
+
+
+def spectral_entropy(spectrum: Spectrum1D) -> float:
+    """
+    Спектральная энтропия: H = - sum(p_i * log(p_i)),
+    где p_i = нормированная мощность.
+    
+    Args:
+        spectrum: Спектр для анализа.
+    
+    Returns:
+        Значение энтропии.
+    """
+    total = spectrum.total_power()
+    if total == 0:
+        return 0.0
+    
+    # Нормируем мощность (как вероятность)
+    p = spectrum.power / total
+    
+    # Исключаем нули для логарифма
+    p = p[p > 0]
+    
+    return float(-np.sum(p * np.log(p)))
+
+

@@ -138,3 +138,112 @@ def test_spectral_analyzer_window_none():
     # Should still work
     assert len(spectrum.omega) > 0
     assert len(spectrum.power) > 0
+
+
+def test_average_spectrum_basic():
+    """Test averaging two identical spectra."""
+    from spectral_physics.diagnostics import average_spectrum
+    
+    omega = np.array([1.0, 2.0, 3.0])
+    power = np.array([1.0, 2.0, 1.0])
+    
+    spec1 = Spectrum1D(omega=omega, power=power)
+    spec2 = Spectrum1D(omega=omega, power=power)
+    
+    avg = average_spectrum([spec1, spec2])
+    
+    np.testing.assert_array_equal(avg.omega, omega)
+    np.testing.assert_array_equal(avg.power, power)
+
+
+def test_average_spectrum_different_power():
+    """Test averaging spectra with different powers."""
+    from spectral_physics.diagnostics import average_spectrum
+    
+    omega = np.array([1.0, 2.0])
+    spec1 = Spectrum1D(omega=omega, power=np.array([1.0, 1.0]))
+    spec2 = Spectrum1D(omega=omega, power=np.array([3.0, 3.0]))
+    
+    avg = average_spectrum([spec1, spec2])
+    
+    # Average of 1 and 3 is 2
+    expected = np.array([2.0, 2.0])
+    np.testing.assert_array_equal(avg.power, expected)
+
+
+def test_average_spectrum_mismatch():
+    """Test that averaging spectra with different grids raises ValueError."""
+    from spectral_physics.diagnostics import average_spectrum
+    
+    spec1 = Spectrum1D(omega=np.array([1.0]), power=np.array([1.0]))
+    spec2 = Spectrum1D(omega=np.array([2.0]), power=np.array([1.0]))
+    
+    with pytest.raises(ValueError, match="different frequency grid"):
+        average_spectrum([spec1, spec2])
+
+
+def test_build_health_profile_simple():
+    """Test building health profile from training data."""
+    from spectral_physics.diagnostics import build_health_profile
+    
+    omega = np.array([1.0, 2.0])
+    power = np.array([1.0, 1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    training_data = {
+        "ch1": [spec, spec],
+        "ch2": [spec, spec]
+    }
+    
+    profile = build_health_profile(training_data)
+    
+    assert "ch1" in profile.signatures
+    assert "ch2" in profile.signatures
+    
+    # Check that signatures are correct (distance to original should be 0)
+    scores = profile.score({"ch1": spec, "ch2": spec})
+    assert scores["ch1"] < 1e-10
+    assert scores["ch2"] < 1e-10
+
+
+def test_spectral_band_power():
+    """Test spectral band power calculation."""
+    from spectral_physics.diagnostics import spectral_band_power
+    
+    # 10 Hz and 100 Hz
+    omega = np.array([2*np.pi*10, 2*np.pi*100])
+    power = np.array([1.0, 2.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    # Band covering only 10 Hz
+    p1 = spectral_band_power(spec, freq_min=5, freq_max=15)
+    assert abs(p1 - 1.0) < 1e-10
+    
+    # Band covering only 100 Hz
+    p2 = spectral_band_power(spec, freq_min=90, freq_max=110)
+    assert abs(p2 - 2.0) < 1e-10
+    
+    # Band covering both
+    p3 = spectral_band_power(spec, freq_min=0, freq_max=200)
+    assert abs(p3 - 3.0) < 1e-10
+
+
+def test_spectral_entropy():
+    """Test spectral entropy calculation."""
+    from spectral_physics.diagnostics import spectral_entropy
+    
+    omega = np.array([1.0, 2.0, 3.0])
+    
+    # Uniform spectrum (max entropy)
+    spec_uniform = Spectrum1D(omega=omega, power=np.array([1.0, 1.0, 1.0]))
+    h_uniform = spectral_entropy(spec_uniform)
+    
+    # Peaked spectrum (lower entropy)
+    spec_peaked = Spectrum1D(omega=omega, power=np.array([0.0, 10.0, 0.0]))
+    h_peaked = spectral_entropy(spec_peaked)
+    
+    assert h_uniform > h_peaked
+    # For single peak, entropy should be 0 (-1*log(1))
+    assert abs(h_peaked) < 1e-10
+
+

@@ -9,19 +9,13 @@ description = "Experimental spectral physics toolkit for diagnostics and anomaly
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-    {name = "SpectralPhysics Team"}
+    {name = "Robert Paulig"}
 ]
 dependencies = [
-    "numpy>=1.24.0",
-    "scipy>=1.10.0",
-    "matplotlib>=3.7.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "jupyter>=1.0.0",
-    "notebook>=6.5.0",
+    "numpy>=1.25",
+    "scipy>=1.11",
+    "matplotlib>=3.7",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -32,3 +26,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 spectral_physics = ["py.typed"]
+
