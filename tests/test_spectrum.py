@@ -120,3 +120,34 @@ def test_total_power_with_trapz():
     # The integral should be smaller than the sum for this case
     # because trapz accounts for spacing
     assert total_trapz < total_sum
+
+
+def test_from_function():
+    """Test creating Spectrum1D from a function."""
+    omega = np.linspace(0, 1, 5)
+    spec = Spectrum1D.from_function(omega, lambda w: 2*w)
+    
+    np.testing.assert_array_equal(spec.omega, omega)
+    np.testing.assert_array_equal(spec.power, 2*omega)
+
+
+def test_from_function_exponential():
+    """Test from_function with exponential decay."""
+    omega = np.linspace(0, 5, 50)
+    spec = Spectrum1D.from_function(omega, np.exp)
+    
+    expected_power = np.exp(omega)
+    np.testing.assert_array_almost_equal(spec.power, expected_power)
+
+
+def test_from_function_shape_mismatch():
+    """Test that from_function raises error for wrong return shape."""
+    omega = np.linspace(0, 1, 5)
+    
+    def bad_func(w):
+        return np.array([1.0, 2.0])  # Wrong shape
+    
+    with pytest.raises(ValueError, match="same shape"):
+        Spectrum1D.from_function(omega, bad_func)
+
+

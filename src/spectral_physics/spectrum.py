@@ -78,3 +78,34 @@ class Spectrum1D:
             omega=self.omega.copy(),
             power=self.power * alpha
         )
+    
+    @classmethod
+    def from_function(cls, omega: np.ndarray, func):
+        """
+        Создать Spectrum1D из функции power(omega).
+        
+        Args:
+            omega: Массив частот.
+            func: Функция, принимающая omega и возвращающая power.
+        
+        Returns:
+            Новый экземпляр Spectrum1D.
+        
+        Raises:
+            ValueError: Если func(omega) вернула массив несовместимой формы.
+        
+        Example:
+            >>> omega = np.linspace(0, 10, 100)
+            >>> spec = Spectrum1D.from_function(omega, lambda w: np.exp(-w))
+        """
+        omega = np.asarray(omega, dtype=float)
+        power = np.asarray(func(omega), dtype=float)
+        
+        if power.shape != omega.shape:
+            raise ValueError(
+                f"func(omega) must return array with same shape as omega. "
+                f"Got power shape {power.shape}, expected {omega.shape}"
+            )
+        
+        return cls(omega=omega, power=power)
+

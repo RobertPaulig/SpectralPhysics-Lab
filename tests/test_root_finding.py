@@ -115,3 +115,19 @@ def test_initial_guess_is_root():
     
     assert abs(x_root - 5.0) < 1e-8
     assert n_iter == 0  # Should converge immediately
+
+
+def test_tol_step_stops_on_flat_region():
+    """Test that tol_step criterion stops iteration on flat regions."""
+    def f(x):
+        return x**3
+    
+    # With very tight tol, we'd wait forever
+    # But tol_step should kick in and stop earlier
+    x_root, n_iter = symmetric_newton(f, x0=1.0, tol=1e-20, tol_step=1e-6)
+    
+    # Should stop due to small step, not small function value
+    assert n_iter < 50
+    # Result should still be close to zero
+    assert abs(x_root) < 0.1
+
