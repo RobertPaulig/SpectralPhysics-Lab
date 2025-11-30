@@ -1,0 +1,17 @@
+dt: 0.001
+window: hann
+
+channels:
+  motor_vibration:
+    column: 1
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/current_motor.csv
+
+  pump_vibration:
+    column: 2
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/current_pump.csv

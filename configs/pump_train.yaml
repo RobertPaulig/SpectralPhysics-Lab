@@ -1,0 +1,19 @@
+dt: 0.001          # шаг дискретизации
+window: hann
+
+channels:
+  motor_vibration:
+    column: 1
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/train_motor_1.csv
+      - data/pump/train_motor_2.csv
+
+  pump_vibration:
+    column: 2
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/train_pump_1.csv
+      - data/pump/train_pump_2.csv

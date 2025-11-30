@@ -110,11 +110,26 @@ class MaterialSignature:
 
 
 @dataclass
+class FeatureSignature:
+    """
+    Спектральная сигнатура на пространстве фич.
+    """
+    reference_features: np.ndarray
+
+    def distance_l2(self, other_features: np.ndarray) -> float:
+        if other_features.shape != self.reference_features.shape:
+            raise ValueError("Feature vector shape mismatch")
+        diff = self.reference_features - other_features
+        return float(np.sqrt(np.sum(diff**2)))
+
+
+@dataclass
 class HealthProfile:
     """
     Эталонный профиль "здорового" состояния для нескольких каналов.
     """
     signatures: dict[str, MaterialSignature]  # имя канала -> подпись
+    feature_signatures: dict[str, FeatureSignature] | None = None
 
     def score(self, current: dict[str, Spectrum1D]) -> dict[str, float]:
         """
@@ -125,6 +140,30 @@ class HealthProfile:
         for name, signature in self.signatures.items():
             if name in current:
                 scores[name] = signature.distance_l2(current[name])
+        return scores
+
+    def score_features(
+        self,
+        current: dict[str, Spectrum1D],
+        bands_hz: dict[str, list[tuple[float, float]]],
+    ) -> dict[str, float]:
+        """
+        Для каждого канала:
+        - извлечь фичи,
+        - посчитать L2-дистанцию в пространстве фич.
+        """
+        from .diagnostics import extract_features
+        
+        if self.feature_signatures is None:
+            return {}
+            
+        scores = {}
+        for name, feat_sig in self.feature_signatures.items():
+            if name in current and name in bands_hz:
+                spec = current[name]
+                bands = bands_hz[name]
+                feats = extract_features(spec, bands)
+                scores[name] = feat_sig.distance_l2(feats)
         return scores
 
     def is_anomalous(
@@ -141,4 +180,5 @@ class HealthProfile:
             if name in current and name in thresholds:
                 results[name] = signature.is_anomalous(current[name], thresholds[name])
         return results
+
 

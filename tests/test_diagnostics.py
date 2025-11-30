@@ -247,3 +247,24 @@ def test_spectral_entropy():
     assert abs(h_peaked) < 1e-10
 
 
+def test_extract_features():
+    """Test feature extraction."""
+    from spectral_physics.diagnostics import extract_features
+    
+    # 10 Hz (power 1.0) and 100 Hz (power 2.0)
+    omega = np.array([2*np.pi*10, 2*np.pi*100])
+    power = np.array([1.0, 2.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    bands = [(5, 15), (90, 110)]
+    
+    features = extract_features(spec, bands)
+    
+    assert len(features) == 3  # 2 bands + 1 entropy
+    assert abs(features[0] - 1.0) < 1e-10
+    assert abs(features[1] - 2.0) < 1e-10
+    # Entropy should be > 0 for 2 peaks
+    assert features[2] > 0
+
+
+

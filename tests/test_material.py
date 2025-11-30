@@ -191,3 +191,51 @@ def test_distance_cosine_orthogonal():
     assert abs(dist - 1.0) < 1e-10
 
 
+def test_feature_signature_basic():
+    """Test FeatureSignature distance."""
+    from spectral_physics.material import FeatureSignature
+    
+    ref = np.array([1.0, 2.0, 3.0])
+    sig = FeatureSignature(reference_features=ref)
+    
+    # Identical
+    assert abs(sig.distance_l2(ref)) < 1e-10
+    
+    # Offset
+    other = np.array([2.0, 2.0, 3.0]) # diff is [1, 0, 0]
+    assert abs(sig.distance_l2(other) - 1.0) < 1e-10
+
+
+def test_health_profile_score_features():
+    """Test HealthProfile feature scoring."""
+    from spectral_physics.material import HealthProfile, FeatureSignature, MaterialSignature
+    from spectral_physics.diagnostics import extract_features
+    
+    # Setup dummy data
+    omega = np.array([2*np.pi*10])
+    power = np.array([1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    # Features for this spec: band_power(1.0) + entropy(0.0) = [1.0, 0.0]
+    bands = [(5, 15)]
+    feats = extract_features(spec, bands)
+    
+    feat_sig = FeatureSignature(reference_features=feats)
+    mat_sig = MaterialSignature(reference=spec)
+    
+    profile = HealthProfile(
+        signatures={"ch1": mat_sig},
+        feature_signatures={"ch1": feat_sig}
+    )
+    
+    # Score against itself should be 0
+    scores = profile.score_features(
+        {"ch1": spec},
+        {"ch1": bands}
+    )
+    
+    assert "ch1" in scores
+    assert scores["ch1"] < 1e-10
+
+
+

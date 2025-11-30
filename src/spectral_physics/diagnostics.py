@@ -238,3 +238,27 @@ def spectral_entropy(spectrum: Spectrum1D) -> float:
     return float(-np.sum(p * np.log(p)))
 
 
+def extract_features(
+    spectrum: Spectrum1D,
+    bands_hz: list[tuple[float, float]],
+) -> np.ndarray:
+    """
+    Построить вектор фич:
+    [ band_power_1, ..., band_power_N, spectral_entropy ]
+    
+    Args:
+        spectrum: Спектр.
+        bands_hz: Список кортежей (min_hz, max_hz).
+        
+    Returns:
+        NumPy массив фич.
+    """
+    features = []
+    for fmin, fmax in bands_hz:
+        features.append(spectral_band_power(spectrum, fmin, fmax))
+    
+    features.append(spectral_entropy(spectrum))
+    return np.asarray(features, dtype=float)
+
+
+
