@@ -1,34 +1,72 @@
 ================================================================================
 ПРОЕКТ: SpectralPhysics-Lab
-Дата создания архива: 2025-11-30 14:36:13
+Дата создания архива: 2025-11-30 18:50:56
 ================================================================================
 
 СТРУКТУРА ПРОЕКТА:
 --------------------------------------------------------------------------------
 SpectralPhysics-Lab
+├── configs
+│   ├── pump_score.yaml
+│   ├── pump_thresholds.yaml
+│   └── pump_train.yaml
+├── data
+│   └── pump
+│       ├── current_motor.csv
+│       ├── current_pump.csv
+│       ├── profile.npz
+│       ├── report.md
+│       ├── train_motor_1.csv
+│       ├── train_motor_2.csv
+│       ├── train_pump_1.csv
+│       └── train_pump_2.csv
 ├── examples
-│   ├── health_monitor_demo.ipynb
-│   ├── medium_oscillators_demo.ipynb
-│   └── symmetric_newton_demo.ipynb
+│   ├── atomic_valence_demo.py
+│   ├── generate_synthetic_pump_data.py
+│   ├── geophysics_1d_demo.py
+│   ├── geophysics_health_demo.py
+│   ├── health_monitor_demo.py
+│   ├── material_defect_demo.py
+│   ├── material_health_demo.py
+│   └── medium_2d_modes_demo.py
 ├── src
-│   └── spectral_physics
-│       ├── __init__.py
-│       ├── cli.py
-│       ├── diagnostics.py
-│       ├── grav_toy.py
-│       ├── io.py
-│       ├── material.py
-│       ├── medium_1d.py
-│       ├── report.py
-│       ├── root_finding.py
-│       ├── spectrum.py
-│       └── timeseries.py
+│   ├── spectral_physics
+│   │   ├── __init__.py
+│   │   ├── atoms.py
+│   │   ├── cli.py
+│   │   ├── diagnostics.py
+│   │   ├── geophysics_1d.py
+│   │   ├── grav_toy.py
+│   │   ├── io.py
+│   │   ├── ldos.py
+│   │   ├── material.py
+│   │   ├── materials.py
+│   │   ├── medium_1d.py
+│   │   ├── medium_2d.py
+│   │   ├── report.py
+│   │   ├── root_finding.py
+│   │   ├── spectrum.py
+│   │   └── timeseries.py
+│   └── spectral_physics_lab.egg-info
+│       ├── PKG-INFO
+│       ├── SOURCES.txt
+│       ├── dependency_links.txt
+│       ├── entry_points.txt
+│       ├── requires.txt
+│       └── top_level.txt
 ├── tests
+│   ├── test_atoms.py
 │   ├── test_diagnostics.py
+│   ├── test_diagnostics_features.py
+│   ├── test_geophysics_1d.py
 │   ├── test_grav_toy.py
 │   ├── test_io.py
+│   ├── test_ldos.py
 │   ├── test_material.py
+│   ├── test_material_features.py
+│   ├── test_materials.py
 │   ├── test_medium_1d.py
+│   ├── test_medium_2d.py
 │   ├── test_report.py
 │   ├── test_root_finding.py
 │   ├── test_spectrum.py
@@ -47,302 +85,1034 @@ SpectralPhysics-Lab
 ФАЙЛ: AI_TASKS.md
 ================================================================================
 
-Ооо, вот это уже не «я создал репо», а реально живой пакет 😄
-Давай честное код-ревью + следующий пакет задач для твоего ИИ.
+# МЕГА-ПРОЕКТ: spectral-health v1.0
+
+Цель: превратить текущий код в **полноценный инструмент диагностики машин**:
+
+- Вход: CSV с вибрацией/сигналами.
+- Выход: CLI-утилита `spectral-health`, которая:
+  - обучает "здоровый профиль" по историческим данным;
+  - анализирует новые данные;
+  - даёт статус по каждому каналу (OK / ANOMALY);
+  - пишет красивый Markdown-отчёт.
 
 ---
 
-## 1. Общая картина
+## ЭТАП 20. Доводим ядро и упаковку до боевого состояния
 
-У тебя уже есть:
+**Файлы:** `pyproject.toml`, `README.md`, `src/spectral_physics/cli.py`
 
-* `symmetric_newton` — рабочий, аккуратный метод.
-* `Spectrum1D` — нормальный объект спектра.
-* `OscillatorChain1D` — цепочка осцилляторов, eigenmodes считаются.
-* `spectral_pressure_difference` — игрушечная «спектральная тень».
-* Тесты для всего этого — и они не микроскопические, а вполне серьёзные.
+- [ ] Исправить `pyproject.toml`:
+  - корректный блок `[project]` с:
+    - `name`, `version`, `description`, `readme`, `requires-python`;
+    - `dependencies = ["numpy", "scipy", "matplotlib", "pyyaml"]` и т.п.
+  - рабочий `[project.scripts]`:
+    ```toml
+    [project.scripts]
+    spectral-health = "spectral_physics.cli:main"
+    ```
 
-Это уже версия **v0.0.1 живого ядра**. Это не болтовня, это код, который можно ставить в `pip install -e .` и использовать.
+- [ ] Поправить импорт `HealthProfile` в `cli.py`:
+  - импортировать `HealthProfile` из `spectral_physics.material`.
 
-Теперь — по файлам.
+- [ ] Прочистить `README.md`:
+  - убрать дублирующийся кусок текста;
+  - добавить раздел:
+    ```markdown
+    ## Installation
+
+    ```bash
+    pip install -e .
+    spectral-health --help
+    ```
+    ```
 
 ---
 
-## 2. Замечания по коду (без драм)
+## ЭТАП 21. YAML-конфиги и демонстрационный pipeline
 
-### 2.1. `__init__.py`
+**Новые файлы:**
+- `configs/pump_train.yaml`
+- `configs/pump_score.yaml`
+- `configs/pump_thresholds.yaml`
+- `examples/generate_synthetic_pump_data.py`
 
-```python
-__all__ = [
-    "symmetric_newton",
-    "Spectrum1D",
-    "OscillatorChain1D",
-    "spectral_pressure_difference",
-]
-```
+### 21.1. Пример конфигов
 
-Сейчас имена в `__all__` **не импортированы** в пакет, то есть:
+- [ ] Создать папку `configs/`.
 
-```python
-from spectral_physics import symmetric_newton
-```
+- [ ] `configs/pump_train.yaml` — пример конфигурации для обучения:
 
-упадёт с `AttributeError`.
+  ```yaml
+  dt: 0.001          # шаг дискретизации
+  window: hann
 
-Либо:
+  channels:
+    motor_vibration:
+      column: 1
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/train_motor_1.csv
+        - data/pump/train_motor_2.csv
 
-* делаешь явные импорты:
+    pump_vibration:
+      column: 2
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/train_pump_1.csv
+        - data/pump/train_pump_2.csv
+  ```
+
+- [ ] `configs/pump_score.yaml` — аналогично, но для **текущего состояния**:
+
+  ```yaml
+  dt: 0.001
+  window: hann
+
+  channels:
+    motor_vibration:
+      column: 1
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/current_motor.csv
+
+    pump_vibration:
+      column: 2
+      freq_min: 0.0
+      freq_max: 500.0
+      files:
+        - data/pump/current_pump.csv
+  ```
+
+- [ ] `configs/pump_thresholds.yaml` — пороги:
+
+  ```yaml
+  motor_vibration: 0.15
+  pump_vibration: 0.20
+  ```
+
+### 21.2. Генератор синтетических данных
+
+**Файл:** `examples/generate_synthetic_pump_data.py`
+
+- [ ] Написать скрипт, который:
+
+  * создаёт папку `data/pump/`;
+  * генерирует тренировочные CSV:
+
+    * `train_motor_1.csv`, `train_motor_2.csv`;
+    * `train_pump_1.csv`, `train_pump_2.csv`;
+  * генерирует "текущие" CSV:
+
+    * `current_motor.csv` (нормальный);
+    * `current_pump.csv` (с аномалией: добавлен новый пик, шум или дрейф).
+
+- [ ] Формат CSV:
+
+  ```text
+  time, motor_vibration, pump_vibration
+  0.000, ...
+  0.001, ...
+  ...
+  ```
+
+  * первая строка — заголовок;
+  * столбец 1 — время, столбец 2 — мотор, столбец 3 — насос.
+
+- [ ] Внутри использовать `numpy` для генерации сигналов:
+
+  * Healthy: сумма нескольких синусов + немного шума;
+  * Anomaly: усиленный один из пиков + дополнительный шум.
+
+---
+
+## ЭТАП 22. Умный health-профиль с фичами (band-power + энтропия)
+
+Сейчас `MaterialSignature.distance_l2` сравнивает **нормированные спектры целиком** 
+
+Хочется добавить ещё один уровень: сравнение по набору фич.
+
+**Файлы:** `src/spectral_physics/material.py`, `src/spectral_physics/diagnostics.py`, `tests/test_material.py`, `tests/test_diagnostics.py`
+
+### 22.1. Вектор фич по спектру
+
+- [ ] Добавить в `diagnostics.py` функцию:
 
   ```python
-  from .root_finding import symmetric_newton
+  import numpy as np
   from .spectrum import Spectrum1D
-  from .medium_1d import OscillatorChain1D
-  from .grav_toy import spectral_pressure_difference
-  ```
-
-  и тогда `__all__` корректен;
-
-либо:
-
-* оставляешь как есть, но тогда в README честно писать:
-
-  ```python
-  from spectral_physics.root_finding import symmetric_newton
-  ```
-
-Я бы всё-таки **сделал удобный верхнеуровневый импорт** (через `__init__`), чтобы потом самому было приятнее жить.
-
----
-
-### 2.2. `root_finding.py` — `symmetric_newton`
-
-Сделано хорошо:
-
-* симметричная разностная производная;
-* защита от почти нулевого df;
-* ограничение на гигантский шаг;
-* небольшой backtracking.
-
-Что бы я добавил (не ломая API):
-
-1. **Критерий по шагу**
-   Сейчас остановка только по `|f(x)| < tol`.
-   Добавь ещё условие типа:
-
-   ```python
-   if abs(delta) < tol_step:
-       return x, i
-   ```
-
-   Особенно полезно для плоских минимумов (`x^3`, `abs(x)`), где `f(x)` снижается медленно.
-
-2. **Возможность передать tol отдельно**
-   Например:
-
-   ```python
-   def symmetric_newton(..., tol_f: float = 1e-10, tol_x: float = 1e-12)
-   ```
-
-   Но это уже «косметика», можно позже.
-
-В остальном — нормальный рабочий солвер.
-
----
-
-### 2.3. `Spectrum1D`
-
-Очень прилично:
-
-* проверка совпадения форм;
-* нормировка;
-* фильтр с проверкой размера.
-
-Мелкие предложения:
-
-1. **Фабричный метод из функции**
-   Чтобы можно было быстро строить спектр из `f(ω)`:
-
-   ```python
-   @classmethod
-   def from_function(cls, omega: np.ndarray, func):
-       power = func(omega)
-       return cls(omega=omega, power=power)
-   ```
-
-   Это резко упростит примеры.
-
-2. **Интеграл с учётом шага**
-   Сейчас `total_power` = `sum(power)`, что нормально для «дискретного» спектра.
-   Позже можно добавить:
-
-   ```python
-   def total_power_trapz(self) -> float:
-       return float(np.trapz(self.power, self.omega))
-   ```
-
-   и честно различать «сумма» vs «интеграл».
-
----
-
-### 2.4. `OscillatorChain1D`
-
-Отлично:
-
-* валидация параметров;
-* тридиагональная матрица;
-* eigenmodes через `scipy.linalg.eigh` с отсечкой отрицательных λ.
-
-Важный момент — **границы**:
-
-```python
-# Диагональ: 2*k везде
-```
-
-Это «жёстко закреплённые края» (fixed–fixed). Всё ок, но:
-
-* это надо **явно написать** в docstring (чтобы потом не мучиться, почему формула мод такая, а не другая);
-* в будущем полезно добавить флаг:
-
-  ```python
-  bc: str = "fixed"  # или "free"
-  ```
-
-и строить K в зависимости от `bc`. Но это уже следующая итерация.
-
----
-
-### 2.5. `grav_toy.py`
-
-Логика чистая:
-
-```python
-ΔP = Σ P(ω) * (α_right(ω) - α_left(ω))
-```
-
-Физически это «дискретная версия» `∫ P(ω)(α_R - α_L) dω`.
-
-Чего можно добавить потом:
-
-* опциональный учёт шага `Δω`:
-
-  ```python
-  delta_p = np.sum(spectrum_bg.power * delta_alpha) * d_omega
-  ```
-
-  или через `np.trapz`. Но для «toy model» и без этого нормально.
-
-Тесты у тебя хорошие, особенно с Гауссом.
-
----
-
-## 3. Что сказать ИИ ДАЛЬШЕ (готовый блок для `AI_TASKS.md`)
-
-Вот тебе следующий чёткий блок задач. Можешь просто добавить его в конец `AI_TASKS.md` как «ЭТАП 8–10».
-
-````markdown
----
-
-## ЭТАП 8. Удобный верхнеуровневый импорт
-
-**Файл:** `src/spectral_physics/__init__.py`
-
-- [ ] Добавить явные импорты в пакет:
-
-  ```python
-  from .root_finding import symmetric_newton
-  from .spectrum import Spectrum1D
-  from .medium_1d import OscillatorChain1D
-  from .grav_toy import spectral_pressure_difference
-````
-
-* [ ] Оставить `__all__` как есть.
-
-* [ ] Обновить `README.md`, чтобы в примерах можно было писать:
-
-  ```python
-  from spectral_physics import symmetric_newton, Spectrum1D
-  ```
-
----
-
-## ЭТАП 9. Улучшение symmetric_newton
-
-**Файл:** `src/spectral_physics/root_finding.py`
-
-* [ ] Добавить второй критерий остановки по шагу:
-
-  ```python
-  def symmetric_newton(..., tol: float = 1e-10, tol_step: float = 1e-12):
-      ...
-      if abs(fx) < tol or abs(delta) < tol_step:
-          return x, i
-  ```
-
-* [ ] Обновить docstring (описать `tol_step`).
-
-* [ ] Добавить новый тест в `tests/test_root_finding.py`:
-
-  ```python
-  def test_tol_step_stops_on_flat_region():
-      def f(x):
-          return x**3
-      x_root, n_iter = symmetric_newton(f, x0=1.0, tol=1e-20, tol_step=1e-6)
-      # По f(x) мы бы долго ждали, но по шагу должно остановиться раньше
-      assert n_iter < 50
-  ```
-
----
-
-## ЭТАП 10. Фабричный метод для Spectrum1D
-
-**Файл:** `src/spectral_physics/spectrum.py`
-
-* [ ] Добавить classmethod:
-
-  ```python
-  @classmethod
-  def from_function(cls, omega: np.ndarray, func):
+  from .diagnostics import spectral_band_power, spectral_entropy
+
+  def extract_features(
+      spectrum: Spectrum1D,
+      bands_hz: list[tuple[float, float]],
+  ) -> np.ndarray:
       """
-      Создать Spectrum1D из функции power(omega).
-
-      Пример:
-          omega = np.linspace(0, 10, 100)
-          spec = Spectrum1D.from_function(omega, lambda w: np.exp(-w))
+      Построить вектор фич:
+      [ band_power_1, ..., band_power_N, spectral_entropy ]
       """
-      omega = np.asarray(omega, dtype=float)
-      power = np.asarray(func(omega), dtype=float)
-      if power.shape != omega.shape:
-          raise ValueError("func(omega) must return array with same shape as omega")
-      return cls(omega=omega, power=power)
+      features = []
+      for fmin, fmax in bands_hz:
+          features.append(spectral_band_power(spectrum, fmin, fmax))
+      features.append(spectral_entropy(spectrum))
+      return np.asarray(features, dtype=float)
   ```
 
-* [ ] Добавить тест в `tests/test_spectrum.py`:
+- [ ] Добавить тест в `tests/test_diagnostics.py`:
+
+  * создать простой спектр с двумя частотами;
+  * проверить, что `extract_features` даёт ожидаемые значения band power;
+  * проверить, что размерность вектора = `len(bands) + 1`.
+
+### 22.2. Фичевая сигнатура материала
+
+- [ ] В `material.py` добавить новый dataclass:
 
   ```python
-  def test_from_function():
-      omega = np.linspace(0, 1, 5)
-      spec = Spectrum1D.from_function(omega, lambda w: 2*w)
-      np.testing.assert_array_equal(spec.omega, omega)
-      np.testing.assert_array_equal(spec.power, 2*omega)
+  @dataclass
+  class FeatureSignature:
+      """
+      Спектральная сигнатура на пространстве фич.
+      """
+      reference_features: np.ndarray
+
+      def distance_l2(self, other_features: np.ndarray) -> float:
+          if other_features.shape != self.reference_features.shape:
+              raise ValueError("Feature vector shape mismatch")
+          diff = self.reference_features - other_features
+          return float(np.sqrt(np.sum(diff**2)))
   ```
+
+- [ ] Добавить тесты в `tests/test_material.py`:
+
+  * `test_feature_signature_zero_distance_for_identical`;
+  * `test_feature_signature_shape_mismatch_raises`.
+
+### 22.3. HealthProfile с двумя уровнями
+
+- [ ] Обновить `HealthProfile` так, чтобы он мог хранить **оба типа** сигнатур:
+
+  ```python
+  @dataclass
+  class HealthProfile:
+      signatures: dict[str, MaterialSignature]
+      feature_signatures: dict[str, FeatureSignature] | None = None
+  ```
+
+- [ ] Добавить метод:
+
+  ```python
+  def score_features(
+      self,
+      current: dict[str, Spectrum1D],
+      bands_hz: dict[str, list[tuple[float, float]]],
+  ) -> dict[str, float]:
+      """
+      Для каждого канала:
+      - извлечь фичи,
+      - посчитать L2-дистанцию в пространстве фич.
+      """
+  ```
+
+- [ ] Добавить тест в `tests/test_material.py`, который:
+
+  * строит простые спектры;
+  * создаёт `FeatureSignature`;
+  * проверяет, что `score_features` возвращает корректный словарь.
 
 ---
 
-```
+## ЭТАП 23. Полный демо-кейс: от генерации данных до отчёта
 
-Скажи своему локальному ИИ:
+**Цель:** Один сценарий, который можно описать в README: *«запусти эти команды — и получишь отчёт о состоянии виртуального насоса».*
 
-> «Выполняй ЭТАП 8–10 в AI_TASKS.md».
+**Файлы:** `README.md`, `examples/health_monitor_demo.ipynb`, возможно новый `examples/pump_health_demo.ipynb`.
 
-Потом, когда он это доделает, ты скинешь мне обновку (или просто скажешь «этапы готовы»), и мы перейдём к **следующему уровню**:
+- [ ] Обновить или создать ноутбук `examples/health_monitor_demo.ipynb` так, чтобы он делал:
 
-- добавим ещё один тип среды (2D сетка / мембрана),
-- сделаем первый **реально полезный пример**:  
-  например, «Спектральная подпись двух разных материалов» (это уже шаг к геофизике / дефектоскопии).
+  1. `!python examples/generate_synthetic_pump_data.py`
+  2. `!spectral-health train --config configs/pump_train.yaml --out data/pump/profile.npz`
+  3. `!spectral-health score --config configs/pump_score.yaml --profile data/pump/profile.npz --thresholds configs/pump_thresholds.yaml --report data/pump/report.md`
+  4. В конце ноутбука открыть и показать `report.md`.
 
-Ты сейчас сделал очень важное: у тебя появился **минимальный, но реальный спектральный движок**. Это уже не сказка, а инструмент.
-::contentReference[oaicite:0]{index=0}
-```
+- [ ] Дополнить `README.md` разделом **"Quick start: Pump demo"**:
+
+  ```markdown
+  ## Quick start: Pump health demo
+
+  ```bash
+  pip install -e .
+
+  # 1. Сгенерировать синтетические данные
+  python examples/generate_synthetic_pump_data.py
+
+  # 2. Обучить профиль "здорового" состояния
+  spectral-health train \
+    --config configs/pump_train.yaml \
+    --out data/pump/profile.npz
+
+  # 3. Оценить текущее состояние и получить отчёт
+  spectral-health score \
+    --config configs/pump_score.yaml \
+    --profile data/pump/profile.npz \
+    --thresholds configs/pump_thresholds.yaml \
+    --report data/pump/report.md
+  ```
+  ```
+
+- [ ] Убедиться, что в отчёте есть как минимум:
+
+  * таблица с каналами, distance, threshold, статусом (уже делает `generate_markdown_report`) 
+  * понятный текст: "All systems nominal" или "Anomalies detected!"
+
+
+
+================================================================================
+ФАЙЛ: configs\pump_score.yaml
+================================================================================
+
+dt: 0.001
+window: hann
+
+channels:
+  motor_vibration:
+    column: 1
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/current_motor.csv
+
+  pump_vibration:
+    column: 2
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/current_pump.csv
+
+
+
+================================================================================
+ФАЙЛ: configs\pump_thresholds.yaml
+================================================================================
+
+motor_vibration: 0.15
+pump_vibration: 0.20
+
+
+
+================================================================================
+ФАЙЛ: configs\pump_train.yaml
+================================================================================
+
+dt: 0.001          # шаг дискретизации
+window: hann
+
+channels:
+  motor_vibration:
+    column: 1
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/train_motor_1.csv
+      - data/pump/train_motor_2.csv
+
+  pump_vibration:
+    column: 2
+    freq_min: 0.0
+    freq_max: 500.0
+    files:
+      - data/pump/train_pump_1.csv
+      - data/pump/train_pump_2.csv
+
+
+
+================================================================================
+ФАЙЛ: data\pump\report.md
+================================================================================
+
+# Spectral Health Report
+
+**Date:** 2025-11-30 15:11:37
+
+## Channel Status
+
+| Channel | Distance | Threshold | Status |
+|---------|----------|-----------|--------|
+| `motor_vibration` | 0.003497 | 0.150000 | 🟢 OK |
+| `pump_vibration` | 0.244686 | 0.200000 | 🔴 **ANOMALY** |
+
+> [!WARNING]
+> Anomalies detected! Please check the affected channels.
+
+
+================================================================================
+ФАЙЛ: examples\atomic_valence_demo.py
+================================================================================
+
+"""
+Atomic Valence as Surface Resonances
+
+This demo explores the idea that chemical valence can be modeled as "spectral compatibility" 
+between resonators. We use toy models of atoms (H, O, C) defined by their resonance frequencies.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from spectral_physics.atoms import H, O, C, spectral_overlap, can_form_bond
+
+def plot_atom_spectra(atom1, atom2):
+    fig, ax = plt.subplots(figsize=(10, 4))
+    
+    # Plot lines for Atom 1
+    ax.vlines(atom1.omega, 0, atom1.power, colors='blue', label=f'{atom1.name} lines', lw=2)
+    
+    # Plot lines for Atom 2
+    ax.vlines(atom2.omega, 0, atom2.power, colors='red', label=f'{atom2.name} lines', lw=2, linestyle='--')
+    
+    ax.set_title(f"Spectral Comparison: {atom1.name} vs {atom2.name}")
+    ax.set_xlabel("Frequency (arbitrary units)")
+    ax.set_ylabel("Intensity")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    return fig
+
+def main():
+    print("=" * 60)
+    print("Atomic Valence as Surface Resonances Demo")
+    print("=" * 60)
+    
+    # 1. Hydrogen vs Oxygen (Water)
+    print("\n1. Hydrogen vs Oxygen (Water)")
+    print("-" * 40)
+    print("Oxygen has multiple lines around 1.0, matching Hydrogen's single line at 1.0.")
+    
+    fig1 = plot_atom_spectra(H, O)
+    
+    overlap = spectral_overlap(H, O)
+    print(f"Spectral Overlap (H-O): {overlap:.3f}")
+    print(f"Can form bond? {can_form_bond(H, O, freq_tol=0.1, threshold=0.1)}")
+    print(f"O max bonds: {O.max_bonds} -> Can hold two H atoms (H-O-H)")
+    
+    plt.show()
+    
+    # 2. Carbon vs Hydrogen (Methane)
+    print("\n2. Carbon vs Hydrogen (Methane)")
+    print("-" * 40)
+    print("Carbon has a broader spectrum, overlapping well with Hydrogen.")
+    
+    fig2 = plot_atom_spectra(C, H)
+    
+    overlap = spectral_overlap(C, H)
+    print(f"Spectral Overlap (C-H): {overlap:.3f}")
+    print(f"C max bonds: {C.max_bonds} -> Can hold four H atoms (CH4)")
+    
+    plt.show()
+    
+    # 3. Carbon vs Oxygen (CO2)
+    print("\n3. Carbon vs Oxygen (CO2)")
+    print("-" * 40)
+    print("Carbon and Oxygen also overlap significantly.")
+    
+    fig3 = plot_atom_spectra(C, O)
+    
+    overlap = spectral_overlap(C, O)
+    print(f"Spectral Overlap (C-O): {overlap:.3f}")
+    
+    plt.show()
+    
+    print("\n" + "=" * 60)
+    print("Conclusion: Valence emerges from spectral resonance compatibility!")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================================================
+ФАЙЛ: examples\generate_synthetic_pump_data.py
+================================================================================
+
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+def generate_signal(t, freqs, amps, noise_level=0.1):
+    signal = np.zeros_like(t)
+    for f, a in zip(freqs, amps):
+        signal += a * np.sin(2 * np.pi * f * t)
+    noise = np.random.normal(0, noise_level, size=len(t))
+    return signal + noise
+
+def main():
+    # Setup
+    data_dir = Path("data/pump")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    
+    dt = 0.001
+    duration = 10.0
+    t = np.arange(0, duration, dt)
+    
+    print(f"Generating data in {data_dir}...")
+    
+    # Define "Healthy" characteristics
+    # Motor: 50Hz (main), 100Hz (harmonic)
+    motor_freqs = [50.0, 100.0]
+    motor_amps = [1.0, 0.2]
+    
+    # Pump: 30Hz (vane pass), 60Hz
+    pump_freqs = [30.0, 60.0]
+    pump_amps = [0.8, 0.3]
+    
+    # 1. Generate Training Data (Healthy)
+    # We generate slightly different variations for training
+    
+    # Train Motor 1
+    m1 = generate_signal(t, motor_freqs, motor_amps, noise_level=0.1)
+    p1 = generate_signal(t, pump_freqs, pump_amps, noise_level=0.1)
+    df1 = pd.DataFrame({'time': t, 'motor_vibration': m1, 'pump_vibration': p1})
+    df1.to_csv(data_dir / "train_motor_1.csv", index=False)
+    # Note: We save the same file for pump training or different ones?
+    # The config expects:
+    # motor_vibration files: train_motor_1.csv, train_motor_2.csv
+    # pump_vibration files: train_pump_1.csv, train_pump_2.csv
+    # We can just reuse the same structure or make separate files if we want strictly separate sensors.
+    # But the config implies we might have different files for different channels or same files.
+    # Let's generate 4 files as requested by the config structure, 
+    # but actually the config says:
+    # motor: train_motor_1.csv, train_motor_2.csv
+    # pump: train_pump_1.csv, train_pump_2.csv
+    # So we should probably generate these 4 files.
+    
+    # Train Motor 2 (slight variation)
+    m2 = generate_signal(t, motor_freqs, [a * 1.05 for a in motor_amps], noise_level=0.12)
+    p2 = generate_signal(t, pump_freqs, [a * 0.95 for a in pump_amps], noise_level=0.11)
+    df2 = pd.DataFrame({'time': t, 'motor_vibration': m2, 'pump_vibration': p2})
+    df2.to_csv(data_dir / "train_motor_2.csv", index=False)
+    
+    # Train Pump 1 (can be same as motor 1 or different)
+    # Let's make them distinct files to match the config exactly
+    df1.to_csv(data_dir / "train_pump_1.csv", index=False)
+    df2.to_csv(data_dir / "train_pump_2.csv", index=False)
+    
+    print("  Created training files.")
+    
+    # 2. Generate Current Data (Test)
+    
+    # Current Motor (Normal)
+    m_curr = generate_signal(t, motor_freqs, [a * 1.02 for a in motor_amps], noise_level=0.1)
+    p_curr_normal = generate_signal(t, pump_freqs, pump_amps, noise_level=0.1)
+    df_curr_motor = pd.DataFrame({'time': t, 'motor_vibration': m_curr, 'pump_vibration': p_curr_normal})
+    df_curr_motor.to_csv(data_dir / "current_motor.csv", index=False)
+    
+    # Current Pump (Anomaly!)
+    # Add a new frequency component at 150Hz (bearing fault?) and increase noise
+    m_anom = generate_signal(t, motor_freqs, motor_amps, noise_level=0.1)
+    
+    pump_freqs_anom = pump_freqs + [150.0]
+    pump_amps_anom = pump_amps + [0.5] # Significant new peak
+    p_anom = generate_signal(t, pump_freqs_anom, pump_amps_anom, noise_level=0.2) # Higher noise
+    
+    df_curr_pump = pd.DataFrame({'time': t, 'motor_vibration': m_anom, 'pump_vibration': p_anom})
+    df_curr_pump.to_csv(data_dir / "current_pump.csv", index=False)
+    
+    print("  Created current status files (Motor: OK, Pump: ANOMALY).")
+    print("Done.")
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================================================
+ФАЙЛ: examples\geophysics_1d_demo.py
+================================================================================
+
+"""
+1D Geophysics: Layered Earth & Inversion
+
+This demo simulates a seismic pulse propagating through a layered medium.
+We then solve a simple inverse problem: determining the thickness of the top layer 
+from the surface response.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from spectral_physics.geophysics_1d import (
+    Layer, LayeredMedium1D, simulate_pulse_response, invert_single_layer_thickness
+)
+
+def main():
+    print("=" * 60)
+    print("1D Geophysics: Layered Earth & Inversion")
+    print("=" * 60)
+    
+    # 1. Setup "True" Earth Model
+    # Layer 1: Soft soil (low density/stiffness), unknown thickness
+    true_h = 15.0
+    layer1 = Layer(thickness=true_h, density=1.5, stiffness=2.0)
+    
+    # Layer 2: Hard rock (high density/stiffness), known properties
+    layer2 = Layer(thickness=50.0, density=3.0, stiffness=10.0)
+    
+    medium_true = LayeredMedium1D(layers=[layer1, layer2], dx=0.5)
+    
+    print(f"\nTrue Model: Top layer thickness = {true_h}")
+    
+    # 2. Simulate Surface Response (The "Measurement")
+    t_max = 50.0
+    dt = 0.1
+    
+    print("\nSimulating seismic response...")
+    t, signal_true = simulate_pulse_response(medium_true, t_max=t_max, dt=dt)
+    
+    plt.figure(figsize=(10, 4))
+    plt.plot(t, signal_true, label='Observed Signal')
+    plt.title("Seismic Response (Surface Displacement)")
+    plt.xlabel("Time")
+    plt.ylabel("Amplitude")
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.show()
+    
+    # 3. Solve Inverse Problem
+    # We know density/stiffness of top layer, but not thickness.
+    # We know the substrate (layer2).
+    
+    guess_h = 10.0
+    print(f"\nStarting inversion with guess h = {guess_h}...")
+    
+    found_h = invert_single_layer_thickness(
+        target_signal=signal_true,
+        t=t,
+        density=layer1.density,
+        stiffness=layer1.stiffness,
+        thickness_guess=guess_h,
+        fixed_layers_below=[layer2],
+        dx=0.5
+    )
+    
+    print(f"Inversion Result: h = {found_h:.2f} (True: {true_h})")
+    error = abs(found_h - true_h)
+    print(f"Error: {error:.2f}")
+    
+    # 4. Verify Result
+    # Simulate with found thickness
+    print("\nVerifying result...")
+    layer_found = Layer(thickness=found_h, density=layer1.density, stiffness=layer1.stiffness)
+    medium_found = LayeredMedium1D(layers=[layer_found, layer2], dx=0.5)
+    _, signal_found = simulate_pulse_response(medium_found, t_max=t_max, dt=dt)
+    
+    plt.figure(figsize=(10, 4))
+    plt.plot(t, signal_true, 'k-', alpha=0.5, lw=3, label='Observed')
+    plt.plot(t, signal_found, 'r--', label='Model (Inverted)')
+    plt.title(f"Model Fit (h_found={found_h:.2f})")
+    plt.xlabel("Time")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+    
+    print("\n" + "=" * 60)
+    print("Conclusion:")
+    print("We successfully recovered the thickness of the top layer")
+    print("by matching the seismic response.")
+    print("This is a toy example of full-waveform inversion (FWI).")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================================================
+ФАЙЛ: examples\geophysics_health_demo.py
+================================================================================
+
+"""
+Geophysics Health Monitoring
+
+This demo applies health monitoring to geophysical data.
+We assume a "healthy" baseline response (e.g., from a stable formation) 
+and detect changes (e.g., fluid injection, subsidence).
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from spectral_physics.geophysics_1d import (
+    Layer, LayeredMedium1D, simulate_pulse_response, build_geo1d_health_profile
+)
+
+def main():
+    print("=" * 60)
+    print("Geophysics Health Monitoring Demo")
+    print("=" * 60)
+    
+    # 1. Baseline (Healthy) Model
+    print("\nSetting up baseline (healthy) model...")
+    l1 = Layer(thickness=15.0, density=1.5, stiffness=2.0)
+    l2 = Layer(thickness=50.0, density=3.0, stiffness=10.0)
+    medium_base = LayeredMedium1D(layers=[l1, l2], dx=0.5)
+    
+    t, sig_base = simulate_pulse_response(medium_base, t_max=50.0, dt=0.1)
+    
+    profile = build_geo1d_health_profile(sig_base)
+    print("Baseline Features:", profile.reference_features)
+    
+    # 2. Changed Model (Anomaly)
+    # Suppose the top layer becomes softer (e.g., water saturation)
+    print("\nSimulating anomaly (softened top layer)...")
+    l1_soft = Layer(thickness=15.0, density=1.4, stiffness=1.5)  # Stiffness dropped
+    medium_anom = LayeredMedium1D(layers=[l1_soft, l2], dx=0.5)
+    
+    _, sig_anom = simulate_pulse_response(medium_anom, t_max=50.0, dt=0.1)
+    
+    current_sig = build_geo1d_health_profile(sig_anom)
+    
+    distance = profile.distance_l2(current_sig.reference_features)
+    print(f"\nHealth Distance: {distance:.4f}")
+    
+    # 3. Threshold check
+    threshold = 50.0  # Arbitrary threshold
+    print(f"Threshold: {threshold}")
+    
+    if distance > threshold:
+        print("Status: ⚠️  ANOMALY DETECTED (Formation Change)")
+    else:
+        print("Status: ✓ OK")
+    
+    # 4. Visualization
+    plt.figure(figsize=(10, 4))
+    plt.plot(t, sig_base, label='Baseline')
+    plt.plot(t, sig_anom, label='Anomaly (Soft Layer)')
+    plt.title(f"Seismic Response Change (Dist={distance:.2f})")
+    plt.xlabel("Time")
+    plt.ylabel("Amplitude")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+    
+    print("\n" + "=" * 60)
+    print("Conclusion: Formation change detected via health monitoring!")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================================================
+ФАЙЛ: examples\health_monitor_demo.py
+================================================================================
+
+"""
+Health Monitor Demo (Pump Monitoring)
+
+This script demonstrates the end-to-end spectral-health pipeline:
+1. Generate synthetic pump vibration data
+2. Train a health profile
+3. Score current data
+4. Display the generated report
+"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+def main():
+    print("=" * 60)
+    print("Pump Health Monitoring Demo")
+    print("=" * 60)
+    
+    # Get project root
+    project_root = Path(__file__).parent.parent
+    
+    # 1. Generate synthetic data
+    print("\n[Step 1/3] Generating synthetic pump data...")
+    result = subprocess.run(
+        [sys.executable, str(project_root / "examples" / "generate_synthetic_pump_data.py")],
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print("Error:", result.stderr)
+        return
+    print("✓ Data generated")
+    
+    # 2. Train health profile
+    print("\n[Step 2/3] Training health profile...")
+    result = subprocess.run(
+        [
+            "spectral-health", "train",
+            "--config", str(project_root / "configs" / "pump_train.yaml"),
+            "--out", str(project_root / "data" / "pump" / "profile.npz")
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(project_root)
+    )
+    if result.returncode != 0:
+        print("Error:", result.stderr)
+        return
+    print("✓ Profile trained")
+    
+    # 3. Score current data
+    print("\n[Step 3/3] Scoring current data and generating report...")
+    result = subprocess.run(
+        [
+            "spectral-health", "score",
+            "--config", str(project_root / "configs" / "pump_score.yaml"),
+            "--profile", str(project_root / "data" / "pump" / "profile.npz"),
+            "--thresholds", str(project_root / "configs" / "pump_thresholds.yaml"),
+            "--report", str(project_root / "data" / "pump" / "report.md")
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(project_root)
+    )
+    if result.returncode != 0:
+        print("Error:", result.stderr)
+        return
+    print("✓ Report generated")
+    
+    # 4. Display report
+    print("\n" + "=" * 60)
+    print("HEALTH REPORT:")
+    print("=" * 60)
+    report_path = project_root / "data" / "pump" / "report.md"
+    if report_path.exists():
+        print(report_path.read_text())
+    else:
+        print("Report not found!")
+    
+    print("\n" + "=" * 60)
+    print("Demo completed successfully!")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================================================
+ФАЙЛ: examples\material_defect_demo.py
+================================================================================
+
+"""
+Material Defect Demo: LDOS Anomalies
+
+This script demonstrates how a local defect (change in mass or stiffness) affects 
+the Local Spectral Density (LDOS) of a 2D medium.
+We compare a "pristine" plate with a "defective" one.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from spectral_physics.medium_2d import OscillatorGrid2D
+
+def main():
+    print("=" * 60)
+    print("Material Defect Demo: LDOS Anomalies")
+    print("=" * 60)
+    
+    # 1. Setup Pristine Grid
+    nx, ny = 20, 20
+    grid_clean = OscillatorGrid2D(nx=nx, ny=ny, kx=1.0, ky=1.0, m=1.0)
+    
+    # Calculate LDOS map in a low-frequency window
+    freq_window = (0.0, 1.5)
+    n_modes = 50  # Calculate enough modes to cover the window
+    
+    print("\nCalculating LDOS for pristine grid...")
+    ldos_clean = grid_clean.ldos_map(n_modes=n_modes, freq_window=freq_window)
+    
+    # 2. Setup Defective Grid
+    # Defect: Heavy mass in the center (3x3 block)
+    mass_map = np.ones((ny, nx))
+    cx, cy = nx // 2, ny // 2
+    mass_map[cy-1:cy+2, cx-1:cx+2] = 5.0  # 5x heavier
+    
+    grid_defect = OscillatorGrid2D(nx=nx, ny=ny, kx=1.0, ky=1.0, m=1.0, mass_map=mass_map)
+    
+    print("Calculating LDOS for defective grid...")
+    ldos_defect = grid_defect.ldos_map(n_modes=n_modes, freq_window=freq_window)
+    
+    # 3. Visualize Comparison
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    
+    vmin = min(ldos_clean.min(), ldos_defect.min())
+    vmax = max(ldos_clean.max(), ldos_defect.max())
+    
+    im0 = axes[0].imshow(ldos_clean, origin='lower', cmap='inferno', vmin=vmin, vmax=vmax)
+    axes[0].set_title("Pristine LDOS")
+    plt.colorbar(im0, ax=axes[0])
+    
+    im1 = axes[1].imshow(ldos_defect, origin='lower', cmap='inferno', vmin=vmin, vmax=vmax)
+    axes[1].set_title("Defective LDOS (Heavy Center)")
+    plt.colorbar(im1, ax=axes[1])
+    
+    # Difference
+    diff = ldos_defect - ldos_clean
+    im2 = axes[2].imshow(diff, origin='lower', cmap='RdBu_r')
+    axes[2].set_title("Difference (Defect - Clean)")
+    plt.colorbar(im2, ax=axes[2])
+    
+    plt.tight_layout()
+    plt.show()
+    
+    print("\n" + "=" * 60)
+    print("Interpretation:")
+    print("The heavy defect changes the local spectral density.")
+    print("In the low-frequency window, the heavy mass might accumulate")
+    print("more energy (or less, depending on the modes shifted).")
+    print("The difference map clearly highlights the location of the anomaly.")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================================================
+ФАЙЛ: examples\material_health_demo.py
+================================================================================
+
+"""
+Material Health Monitoring
+
+This demo shows how to use spectral-health concepts for materials.
+We treat the LDOS map as the "state" of the material and detect defects 
+as deviations from a healthy profile.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from spectral_physics.medium_2d import OscillatorGrid2D
+from spectral_physics.materials import build_material_health_profile
+
+def main():
+    print("=" * 60)
+    print("Material Health Monitoring Demo")
+    print("=" * 60)
+    
+    # 1. Train Healthy Profile
+    # Create a pristine grid
+    nx, ny = 20, 20
+    grid_clean = OscillatorGrid2D(nx=nx, ny=ny, kx=1.0, ky=1.0, m=1.0)
+    
+    print("\nCalculating healthy LDOS...")
+    # Calculate LDOS
+    ldos_clean = grid_clean.ldos_map(n_modes=50, freq_window=(0.0, 1.5))
+    
+    # Build profile
+    profile = build_material_health_profile(ldos_clean)
+    print("Healthy Profile Features:", profile.reference_features)
+    
+    # 2. Test Defective Material
+    # Create grid with defect
+    print("\nCreating defective material (heavy spot)...")
+    mass_map = np.ones((ny, nx))
+    cx, cy = nx // 2, ny // 2
+    mass_map[cy-1:cy+2, cx-1:cx+2] = 5.0  # Heavy spot
+    
+    grid_defect = OscillatorGrid2D(nx=nx, ny=ny, kx=1.0, ky=1.0, m=1.0, mass_map=mass_map)
+    ldos_defect = grid_defect.ldos_map(n_modes=50, freq_window=(0.0, 1.5))
+    
+    # Build "current" features (using same logic as profile builder)
+    current_sig = build_material_health_profile(ldos_defect)
+    
+    # Calculate distance
+    distance = profile.distance_l2(current_sig.reference_features)
+    print(f"\nHealth Distance: {distance:.4f}")
+    
+    # 3. Threshold Check
+    threshold = 1.0  # Arbitrary threshold
+    print(f"Threshold: {threshold}")
+    
+    if distance > threshold:
+        print("Status: ⚠️  ANOMALY DETECTED (Material Defect)")
+    else:
+        print("Status: ✓ OK")
+    
+    # 4. Visualize
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
+    im0 = axes[0].imshow(ldos_clean, origin='lower', cmap='inferno')
+    axes[0].set_title("Healthy Material")
+    plt.colorbar(im0, ax=axes[0])
+    
+    im1 = axes[1].imshow(ldos_defect, origin='lower', cmap='inferno')
+    axes[1].set_title(f"Defective Material (Dist={distance:.2f})")
+    plt.colorbar(im1, ax=axes[1])
+    
+    plt.tight_layout()
+    plt.show()
+    
+    print("\n" + "=" * 60)
+    print("Conclusion: Defect automatically detected via health distance!")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    main()
+
+
+
+================================================================================
+ФАЙЛ: examples\medium_2d_modes_demo.py
+================================================================================
+
+"""
+2D Medium Modes Demo
+
+This script visualizes the eigenmodes (standing waves) of a 2D oscillator grid (elastic plate).
+We use OscillatorGrid2D to calculate the modes and matplotlib to display them.
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from spectral_physics.medium_2d import OscillatorGrid2D
+
+def main():
+    # 1. Create a 2D Grid
+    nx, ny = 20, 20
+    grid = OscillatorGrid2D(nx=nx, ny=ny, kx=1.0, ky=1.0, m=1.0)
+    
+    print(f"Grid size: {nx}x{ny} = {nx*ny} oscillators")
+    
+    # 2. Calculate Eigenmodes
+    n_modes = 9
+    print(f"Calculating first {n_modes} modes...")
+    omega, modes = grid.eigenmodes(n_modes=n_modes)
+    
+    print("Frequencies:", omega)
+    
+    # 3. Visualize Modes
+    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
+    axes = axes.flatten()
+    
+    for i in range(n_modes):
+        ax = axes[i]
+        
+        # Extract mode vector and reshape to 2D grid
+        mode_vec = modes[:, i]
+        mode_grid = mode_vec.reshape((ny, nx))
+        
+        # Plot
+        im = ax.imshow(mode_grid, cmap='RdBu', origin='lower', interpolation='bicubic')
+        ax.set_title(f"Mode {i+1}: $\\omega$ = {omega[i]:.3f}")
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    
+    plt.tight_layout()
+    plt.suptitle("2D Medium Eigenmodes", y=1.001)
+    plt.show()
+    
+    print("\nThese patterns represent the fundamental resonances of the medium.")
+    print("In a 'spectral physics' context, these are the available 'slots' for energy to occupy.")
+
+if __name__ == "__main__":
+    main()
 
 
 
@@ -365,7 +1135,16 @@ build-backend = "setuptools.build_meta"
 name = "spectral-physics-lab"
 version = "0.1.0"
 description = "Experimental spectral physics toolkit for diagnostics and anomaly detection"
-    "notebook>=6.5.0",
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "Robert Paulig" },
+]
+dependencies = [
+  "numpy>=1.25",
+  "scipy>=1.11",
+  "matplotlib>=3.7",
+  "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -403,138 +1182,78 @@ spectral_physics = ["py.typed"]
 
 ---
 
-## Текущий технический фокус
-
-1. **Базовая математика**  
-   - Реализация *симметричного метода Ньютона* для поиска корней
-     нелинейных уравнений и систем **без явных производных**.
-   - Обёртки для устойчивого решения задач "подбор параметров модели под данные".
-
-2. **Спектральные представления**
-   - Классы для описания 1D-спектров (частоты, амплитуды, фазы).
-   - Простейшая модель *локальной спектральной плотности* `rho_spec(x, ω)`
-     в дискретном виде (сетка по x и по частоте).
-
-3. **Простые физические игрушки (toy models)**
-   - 1D-цепочка осцилляторов (упругая Среда).
-   - Спектральный анализ нормальных мод (моды колебаний цепочки).
-   - Простейшая "гравитационная" модель как **дисбаланс спектра**:
-     влияние "прозрачности" материала на эффективное "ускорение".
-
----
-
-## Язык и стек
-
-- Язык: **Python 3.11+**
-- Библиотеки:
-  - `numpy`
-  - `scipy`
-  - `matplotlib` (для графиков)
-  - (`pytest` для тестов — позже)
-
----
-
-## Планируемая структура репозитория
-
-```text
-SpectralPhysics-Lab/
-├─ README.md                # этот файл
-├─ AI_TASKS.md              # задания для ИИ-ассистента
-├─ pyproject.toml / setup.cfg (позже)  # упаковка проекта как библиотеки
-├─ src/
-│  └─ spectral_physics/
-│     ├─ __init__.py
-│     ├─ root_finding.py        # симметричный Ньютон и обёртки
-│     ├─ spectrum.py            # классы спектров и спектральных операций
-# SpectralPhysics-Lab
-
-**SpectralPhysics-Lab** — это экспериментальный кодовый стенд для новой "спектральной физики":
-
-- Вместо шариков и сил: **Среда** и **колебательные режимы** (моды).
-- Вместо "масса тянет массу": **спектральная тень** и **давление фонового поля**.
-- Вместо магии квантовой механики: **устойчивые резонаторы** (солитоны) в единой Среде.
-
-Цель репозитория — собрать **рабочий набор инструментов**, с которым можно:
-
-- моделировать простейшие "среды" и солитоны;
-- считать спектры (частотные распределения, локальную плотность состояний);
-- играться с "маской" (эффективная масса, гравитация, валентность) как с **спектральными объектами**;
-- готовить основу для прикладных задач (диагностика машин, геофизика, тт.д.).
-
-> Важно: это не "красивая теория на бумаге", а песочница,
-> где любая идея должна доползти до **работающего кода / эксперимента**.
-
----
-
-## Текущий технический фокус
-
-1. **Базовая математика**  
-   - Реализация *симметричного метода Ньютона* для поиска корней
-     нелинейных уравнений и систем **без явных производных**.
-   - Обёртки для устойчивого решения задач "подбор параметров модели под данные".
-
-2. **Спектральные представления**
-   - Классы для описания 1D-спектров (частоты, амплитуды, фазы).
-   - Простейшая модель *локальной спектральной плотности* `rho_spec(x, ω)`
-     в дискретном виде (сетка по x и по частоте).
-
-3. **Простые физические игрушки (toy models)**
-   - 1D-цепочка осцилляторов (упругая Среда).
-   - Спектральный анализ нормальных мод (моды колебаний цепочки).
-   - Простейшая "гравитационная" модель как **дисбаланс спектра**:
-     влияние "прозрачности" материала на эффективное "ускорение".
-
----
-
-## Язык и стек
-
-- Язык: **Python 3.11+**
-- Библиотеки:
-  - `numpy`
-  - `scipy`
-  - `matplotlib` (для графиков)
-  - (`pytest` для тестов — позже)
-
----
-
-## Планируемая структура репозитория
-
-```text
-SpectralPhysics-Lab/
-├─ README.md                # этот файл
-├─ AI_TASKS.md              # задания для ИИ-ассистента
-├─ pyproject.toml / setup.cfg (позже)  # упаковка проекта как библиотеки
-├─ src/
-│  └─ spectral_physics/
-│     ├─ __init__.py
-│     ├─ root_finding.py        # симметричный Ньютон и обёртки
-│     ├─ spectrum.py            # классы спектров и спектральных операций
-│     ├─ medium_1d.py           # 1D модель среды (цепочка осцилляторов)
-│     ├─ grav_toy.py            # простая спектральная "гравитация"
-│     └─ utils.py               # вспомогательные функции
-├─ examples/
-│  ├─ symmetric_newton_demo.ipynb
-│  ├─ spectrum_demo.ipynb
-│  └─ medium_oscillators_demo.ipynb
-## Use-case: Вибродиагностика
-
-1. **Сбор данных**: Собираем логи "здорового" состояния машины (CSV по нескольким каналам).
-2. **Обучение**: Запускаем `spectral-health train --config config.yaml --out profile.npz`.
-3. **Мониторинг**: Регулярно запускаем:
-   ```bash
-   spectral-health score \
-     --config config_live.yaml \
-     --profile profile.npz \
-     --thresholds thresholds.yaml \
-     --report report.md
-   ```
-4. **Анализ**: Смотрим статус по каждому каналу (OK / ANOMALY) и читаем Markdown-отчёт.
-
 ## Installation
-└─ tests/
-   ├─ test_root_finding.py
-   ├─ test_spectrum.py
-   └─ test_medium_1d.py
+
+```bash
+pip install -e .
+spectral-health --help
+```
+
+---
+
+## Quick start: Pump health demo
+
+```bash
+# 1. Сгенерировать синтетические данные
+python examples/generate_synthetic_pump_data.py
+
+# 2. Обучить профиль "здорового" состояния
+spectral-health train \
+  --config configs/pump_train.yaml \
+  --out data/pump/profile.npz
+
+# 3. Оценить текущее состояние и получить отчёт
+spectral-health score \
+  --config configs/pump_score.yaml \
+  --profile data/pump/profile.npz \
+  --thresholds configs/pump_thresholds.yaml \
+  --report data/pump/report.md
+```
+
+## 2D medium demo
+
+Смотрите `examples/medium_2d_modes_demo.ipynb` — там видно,
+как у пластины появляются моды колебаний (стоячие волны).
+
+## Atomic valence as surface resonances (toy model)
+
+Смотрите `examples/atomic_valence_demo.ipynb`: там показано,
+как можно думать про валентность как про количество совпадающих
+резонансных частот между "атомами"-резонаторами.
+
+---
+
+## Текущий технический фокус
+
+1. **Базовая математика**  
+   - Реализация *симметричного метода Ньютона* для поиска корней нелинейных уравнений и систем **без явных производных**.
+   - Обёртки для устойчивого решения задач "подбор параметров модели под данные".
+
+2. **Спектральные представления**
+   - Классы для описания 1D-спектров (частоты, амплитуды, фазы).
+   - Простейшая модель *локальной спектральной плотности* `rho_spec(x, ω)` в дискретном виде (сетка по x и по частоте).
+
+3. **Простые физические игрушки (toy models)**
+   - 1D-цепочка осцилляторов (упругая Среда).
+   - Спектральный анализ нормальных мод (моды колебаний цепочки).
+   - Простейшая "гравитационная" модель как **дисбаланс спектра**: влияние "прозрачности" материала на эффективное "ускорение".
+
+---
+
+## Планируемая структура репозитория
+
+```text
+SpectralPhysics-Lab/
+├─ README.md                # этот файл
+├─ AI_TASKS.md              # задания для ИИ-ассистента
+├─ pyproject.toml           # упаковка проекта как библиотеки
+├─ src/
+│  └─ spectral_physics/
+│     ├─ __init__.py
+│     ├─ root_finding.py    # симметричный Ньютон и обёртки
+│     ├─ spectrum.py        # классы спектров и спектральных операций
+│     ├─ cli.py             # CLI spectral-health
+│     └─ ...
 ```
 
 
@@ -601,6 +1320,146 @@ __all__ = [
 
 
 ================================================================================
+ФАЙЛ: src\spectral_physics\atoms.py
+================================================================================
+
+import numpy as np
+from dataclasses import dataclass
+from .spectrum import Spectrum1D
+
+@dataclass
+class AtomicResonator:
+    """
+    Игрушечная модель атома как набора резонансных частот на поверхности.
+    """
+    name: str
+    omega: np.ndarray        # собственные частоты (рад/с или условные единицы)
+    power: np.ndarray        # "интенсивность" / веса линий
+    max_bonds: int           # сколько связей атом "выдерживает"
+
+    @classmethod
+    def from_lines(
+        cls,
+        name: str,
+        lines: list[tuple[float, float]],
+        max_bonds: int,
+    ) -> "AtomicResonator":
+        """
+        lines: список (частота, интенсивность)
+        """
+        if not lines:
+            return cls(name=name, omega=np.array([]), power=np.array([]), max_bonds=max_bonds)
+            
+        omega = np.array([f for f, a in lines], dtype=float)
+        power = np.array([a for f, a in lines], dtype=float)
+        return cls(name=name, omega=omega, power=power, max_bonds=max_bonds)
+
+    def spectrum(self) -> Spectrum1D:
+        """
+        Вернуть Spectrum1D с заданными линиями.
+        """
+        return Spectrum1D(omega=self.omega, power=self.power)
+
+    def normalized_spectrum(self) -> Spectrum1D:
+        """
+        Нормированный спектр (сумма power = 1).
+        """
+        return self.spectrum().normalize()
+
+
+def spectral_overlap(
+    atom_a: AtomicResonator,
+    atom_b: AtomicResonator,
+    freq_tol: float = 0.05,
+) -> float:
+    """
+    Оценка "резонансной совместимости" двух атомов.
+
+    Идея:
+    - берём линии из A и B
+    - если разность частот |ω_a - ω_b| < freq_tol * ω_avg,
+      считаем, что эти линии могут "сцепиться"
+    - суммаем веса совпадающих линий как меру силы связи.
+
+    Возвращает число [0..1] примерно: чем больше, тем "лучше" связь.
+    """
+    if len(atom_a.omega) == 0 or len(atom_b.omega) == 0:
+        return 0.0
+        
+    overlap_score = 0.0
+    
+    # Нормируем веса, чтобы оценка не зависела от абсолютной амплитуды
+    # (или считаем, что power уже отражает "важность")
+    # Давайте работать с нормированными спектрами для честности
+    spec_a = atom_a.normalized_spectrum()
+    spec_b = atom_b.normalized_spectrum()
+    
+    # Простой перебор всех пар линий (O(Na * Nb)) - для атомов это мало
+    for i, wa in enumerate(spec_a.omega):
+        pa = spec_a.power[i]
+        
+        for j, wb in enumerate(spec_b.omega):
+            pb = spec_b.power[j]
+            
+            w_avg = (wa + wb) / 2.0
+            if w_avg == 0:
+                continue
+                
+            diff = abs(wa - wb)
+            
+            if diff < freq_tol * w_avg:
+                # Резонанс!
+                # Вклад в связь пропорционален произведению интенсивностей (или минимуму?)
+                # Пусть будет произведение, как вероятность совпадения
+                # Или сумма?
+                # ТЗ: "суммаем веса совпадающих линий"
+                # Возьмем min(pa, pb) как "общая энергия резонанса"
+                overlap_score += min(pa, pb)
+                
+    # Ограничим 1.0 (хотя может быть и больше, если много линий совпадают с одной)
+    return min(overlap_score, 1.0)
+
+
+def can_form_bond(
+    atom_a: AtomicResonator,
+    atom_b: AtomicResonator,
+    freq_tol: float,
+    threshold: float,
+) -> bool:
+    """
+    Решаем, возможна ли устойчивое "сцепление":
+    overlap >= threshold и не превышены max_bonds у обоих.
+    """
+    if atom_a.max_bonds <= 0 or atom_b.max_bonds <= 0:
+        return False
+        
+    score = spectral_overlap(atom_a, atom_b, freq_tol)
+    return score >= threshold
+
+
+# --- Toy Atoms ---
+
+H = AtomicResonator.from_lines(
+    name="H",
+    lines=[(1.0, 1.0)],   # один резонанс
+    max_bonds=1,
+)
+
+O = AtomicResonator.from_lines(
+    name="O",
+    lines=[(0.9, 0.5), (1.0, 0.8), (1.1, 0.5)],
+    max_bonds=2,
+)
+
+C = AtomicResonator.from_lines(
+    name="C",
+    lines=[(0.8, 0.7), (1.0, 0.9), (1.2, 0.7)],
+    max_bonds=4,
+)
+
+
+
+================================================================================
 ФАЙЛ: src\spectral_physics\cli.py
 ================================================================================
 
@@ -615,8 +1474,9 @@ from .diagnostics import (
     ChannelConfig, 
     SpectralAnalyzer, 
     build_health_profile,
-    HealthProfile
 )
+from .material import HealthProfile
+
 from .spectrum import Spectrum1D
 
 
@@ -1046,6 +1906,255 @@ def spectral_entropy(spectrum: Spectrum1D) -> float:
     return float(-np.sum(p * np.log(p)))
 
 
+def extract_features(
+    spectrum: Spectrum1D,
+    bands_hz: list[tuple[float, float]],
+) -> np.ndarray:
+    """
+    Построить вектор фич:
+    [ band_power_1, ..., band_power_N, spectral_entropy ]
+    
+    Args:
+        spectrum: Спектр.
+        bands_hz: Список кортежей (min_hz, max_hz).
+        
+    Returns:
+        NumPy массив фич.
+    """
+    features = []
+    for fmin, fmax in bands_hz:
+        features.append(spectral_band_power(spectrum, fmin, fmax))
+    
+    features.append(spectral_entropy(spectrum))
+    return np.asarray(features, dtype=float)
+
+
+
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\geophysics_1d.py
+================================================================================
+
+from dataclasses import dataclass
+import numpy as np
+from .medium_1d import OscillatorChain1D
+from .root_finding import symmetric_newton
+
+@dataclass
+class Layer:
+    thickness: float
+    density: float
+    stiffness: float
+
+@dataclass
+class LayeredMedium1D:
+    layers: list[Layer]
+    dx: float  # шаг дискретизации по глубине
+
+    def to_oscillator_chain(self) -> OscillatorChain1D:
+        """
+        Построить цепочку осцилляторов, где каждый узел
+        наследует параметры слоя, в который он попадает.
+        """
+        total_depth = sum(layer.thickness for layer in self.layers)
+        n_nodes = int(np.ceil(total_depth / self.dx))
+        
+        masses = np.zeros(n_nodes)
+        k_springs = np.zeros(n_nodes - 1)
+        
+        current_depth = 0.0
+        
+        # Заполняем массы узлов
+        for i in range(n_nodes):
+            depth = i * self.dx
+            
+            # Найти слой
+            layer_idx = 0
+            d_acc = 0.0
+            for l_idx, layer in enumerate(self.layers):
+                d_acc += layer.thickness
+                if depth < d_acc:
+                    layer_idx = l_idx
+                    break
+                # Если глубина больше полной (последний узел), берем последний слой
+                layer_idx = len(self.layers) - 1
+            
+            layer = self.layers[layer_idx]
+            
+            # Масса узла ~ плотность * dx (объем 1D элемента)
+            masses[i] = layer.density * self.dx
+            
+        # Заполняем пружины
+        for i in range(n_nodes - 1):
+            depth = (i + 0.5) * self.dx
+            
+            # Найти слой для пружины
+            layer_idx = 0
+            d_acc = 0.0
+            for l_idx, layer in enumerate(self.layers):
+                d_acc += layer.thickness
+                if depth < d_acc:
+                    layer_idx = l_idx
+                    break
+                layer_idx = len(self.layers) - 1
+            
+            layer = self.layers[layer_idx]
+            
+            # Жесткость пружины ~ stiffness / dx
+            k_springs[i] = layer.stiffness / self.dx
+            
+        return OscillatorChain1D(
+            n=n_nodes,
+            m=masses,     # Передаем массив масс
+            k=k_springs   # Передаем массив жесткостей
+        )
+
+
+def simulate_pulse_response(
+    medium: LayeredMedium1D,
+    t_max: float | None = None,
+    dt: float = 0.1,
+    n_steps: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Имитация отклика на удар по поверхности:
+    возвращает (t, signal) — сигнал на поверхности во времени.
+    """
+    chain = medium.to_oscillator_chain()
+    
+    if n_steps is None:
+        if t_max is None:
+            raise ValueError("Must provide either t_max or n_steps")
+        n_steps = int(np.ceil(t_max / dt))
+    
+    # t = np.linspace(0, t_max, n_steps) # This was causing issues
+    t = np.arange(n_steps) * dt
+    
+    # Интегрирование во времени
+    # M x'' + K x = F
+    # F(t) = импульс в t=0 на узле 0
+    
+    # Состояние: x (смещения), v (скорости)
+    x = np.zeros(chain.n)
+    v = np.zeros(chain.n)
+    
+    # Начальный импульс: мгновенная скорость узла 0
+    # Импульс P -> v[0] = P / m[0]
+    # Пусть P = 1.0
+    v[0] = 1.0 / chain.m[0]
+    
+    surface_signal = np.zeros(n_steps)
+    
+    # Явная схема Эйлера-Кромера (полунеявная) или Верле
+    # v(t+dt) = v(t) + a(t)*dt
+    # x(t+dt) = x(t) + v(t+dt)*dt
+    
+    # Для ускорения можно собрать K матрицу один раз, но для 1D цепочки
+    # силы считаются быстро: F_i = k_i*(x_{i+1}-x_i) - k_{i-1}*(x_i - x_{i-1})
+    
+    # Предварительно распарсим k и m для скорости
+    k = chain.k
+    m_inv = 1.0 / chain.m
+    
+    # Handle scalar k
+    if np.ndim(k) == 0:
+        k = np.full(chain.n - 1, float(k))
+    
+    for step in range(n_steps):
+        surface_signal[step] = x[0]
+        
+        # Расчет сил
+        # F = -K * x
+        # Внутренние силы
+        forces = np.zeros(chain.n)
+        
+        # Пружины
+        # force on i from i+1: k[i] * (x[i+1] - x[i])
+        # force on i+1 from i: -k[i] * (x[i+1] - x[i])
+        
+        dx_springs = x[1:] - x[:-1] # x[i+1] - x[i]
+        f_springs = k * dx_springs
+        
+        forces[:-1] += f_springs
+        forces[1:] -= f_springs
+        
+        # Обновление
+        a = forces * m_inv
+        v += a * dt
+        x += v * dt
+        
+    return t, surface_signal
+
+
+def invert_single_layer_thickness(
+    target_signal: np.ndarray,
+    t: np.ndarray,
+    density: float,
+    stiffness: float,
+    thickness_guess: float,
+    fixed_layers_below: list[Layer],
+    dx: float = 0.1,
+) -> float:
+    """
+    Игрушечная обратная задача:
+    подбираем толщину первого слоя (с известными density/stiffness),
+    чтобы сигнал совпал с target.
+    
+    fixed_layers_below: слои, которые идут ПОД первым слоем (известная подложка).
+    """
+    
+    dt = t[1] - t[0]
+    n_steps = len(target_signal)
+    
+    def objective(h: float) -> float:
+        # Собираем среду
+        layer1 = Layer(thickness=h, density=density, stiffness=stiffness)
+        medium = LayeredMedium1D(layers=[layer1] + fixed_layers_below, dx=dx)
+        
+        # Симулируем
+        _, signal = simulate_pulse_response(medium, dt=dt, n_steps=n_steps)
+        
+        # Сравниваем (L2 norm)
+        diff = signal - target_signal
+        return float(np.sum(diff**2))
+
+    from scipy.optimize import minimize_scalar
+    
+    res = minimize_scalar(
+        objective, 
+        bounds=(0.5 * thickness_guess, 2.0 * thickness_guess), 
+        method='bounded'
+    )
+    
+    res = minimize_scalar(
+        objective, 
+        bounds=(0.5 * thickness_guess, 2.0 * thickness_guess), 
+        method='bounded'
+    )
+    
+    return float(res.x)
+
+def build_geo1d_health_profile(signal: np.ndarray) -> "FeatureSignature":
+    """
+    Подпись нормального отклика (например, для конкретной скважины/участка).
+    Вектор признаков: [energy, max_amplitude, mean_abs, std, zero_crossings]
+    """
+    from .material import FeatureSignature
+    
+    # Simple time-domain features
+    energy = np.sum(signal**2)
+    max_amp = np.max(np.abs(signal))
+    mean_abs = np.mean(np.abs(signal))
+    std_val = np.std(signal)
+    
+    # Zero crossings
+    zero_crossings = np.sum(np.diff(np.signbit(signal)))
+    
+    features = np.array([energy, max_amp, mean_abs, std_val, float(zero_crossings)])
+    
+    return FeatureSignature(reference_features=features)
 
 
 
@@ -1284,6 +2393,52 @@ def load_health_profile(path: str) -> "HealthProfile":
 
 
 ================================================================================
+ФАЙЛ: src\spectral_physics\ldos.py
+================================================================================
+
+import numpy as np
+
+def ldos_from_modes(
+    modes: np.ndarray,
+    omegas: np.ndarray,
+    freq_window: tuple[float, float],
+) -> np.ndarray:
+    """
+    Оценка локальной спектральной плотности (LDOS) на решётке 2D.
+
+    Параметры:
+        modes: массив формы (N_points, N_modes),
+               как вернул OscillatorGrid2D.eigenmodes()
+        omegas: массив (N_modes,) — частоты мод
+        freq_window: (omega_min, omega_max) — частотное окно
+
+    Возвращает:
+        ldos: массив (N_points,) — "сила" локального спектра
+              в заданном окне частот.
+    Идея:
+        суммировать |mode_i|^2 по тем модам, у которых
+        omega_i попадает в окно.
+    """
+    w_min, w_max = freq_window
+    
+    # Маска частот, попадающих в окно
+    mask = (omegas >= w_min) & (omegas <= w_max)
+    
+    if not np.any(mask):
+        return np.zeros(modes.shape[0])
+        
+    # Выбираем нужные моды: (N_points, K_selected)
+    selected_modes = modes[:, mask]
+    
+    # Суммируем квадраты амплитуд по модам (вдоль оси 1)
+    # LDOS(x) = sum_i |psi_i(x)|^2
+    ldos = np.sum(selected_modes**2, axis=1)
+    
+    return ldos
+
+
+
+================================================================================
 ФАЙЛ: src\spectral_physics\material.py
 ================================================================================
 
@@ -1399,11 +2554,26 @@ class MaterialSignature:
 
 
 @dataclass
+class FeatureSignature:
+    """
+    Спектральная сигнатура на пространстве фич.
+    """
+    reference_features: np.ndarray
+
+    def distance_l2(self, other_features: np.ndarray) -> float:
+        if other_features.shape != self.reference_features.shape:
+            raise ValueError("Feature vector shape mismatch")
+        diff = self.reference_features - other_features
+        return float(np.sqrt(np.sum(diff**2)))
+
+
+@dataclass
 class HealthProfile:
     """
     Эталонный профиль "здорового" состояния для нескольких каналов.
     """
     signatures: dict[str, MaterialSignature]  # имя канала -> подпись
+    feature_signatures: dict[str, FeatureSignature] | None = None
 
     def score(self, current: dict[str, Spectrum1D]) -> dict[str, float]:
         """
@@ -1414,6 +2584,30 @@ class HealthProfile:
         for name, signature in self.signatures.items():
             if name in current:
                 scores[name] = signature.distance_l2(current[name])
+        return scores
+
+    def score_features(
+        self,
+        current: dict[str, Spectrum1D],
+        bands_hz: dict[str, list[tuple[float, float]]],
+    ) -> dict[str, float]:
+        """
+        Для каждого канала:
+        - извлечь фичи,
+        - посчитать L2-дистанцию в пространстве фич.
+        """
+        from .diagnostics import extract_features
+        
+        if self.feature_signatures is None:
+            return {}
+            
+        scores = {}
+        for name, feat_sig in self.feature_signatures.items():
+            if name in current and name in bands_hz:
+                spec = current[name]
+                bands = bands_hz[name]
+                feats = extract_features(spec, bands)
+                scores[name] = feat_sig.distance_l2(feats)
         return scores
 
     def is_anomalous(
@@ -1431,6 +2625,115 @@ class HealthProfile:
                 results[name] = signature.is_anomalous(current[name], thresholds[name])
         return results
 
+
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\materials.py
+================================================================================
+
+from dataclasses import dataclass
+import numpy as np
+from .atoms import AtomicResonator
+from .spectrum import Spectrum1D
+
+@dataclass
+class MaterialPatch:
+    """
+    Участок материала как "атомная смесь" плюс среда.
+    """
+    atoms: list[AtomicResonator]
+    weights: np.ndarray  # доли каждого атома (сумма = 1)
+
+    def surface_spectrum(self) -> Spectrum1D:
+        """
+        Суммарный спектр поверхности:
+        взвешенная сумма спектров атомов.
+        """
+        if not self.atoms:
+            return Spectrum1D(omega=np.array([]), power=np.array([]))
+            
+        # Для простоты объединим все частоты и просуммируем мощности
+        # (предполагаем дискретные линии)
+        
+        all_freqs = []
+        all_powers = []
+        
+        for atom, w in zip(self.atoms, self.weights):
+            spec = atom.spectrum()
+            all_freqs.extend(spec.omega)
+            all_powers.extend(spec.power * w)
+            
+        all_freqs = np.array(all_freqs)
+        all_powers = np.array(all_powers)
+        
+        # Сортируем по частоте
+        idx = np.argsort(all_freqs)
+        sorted_freqs = all_freqs[idx]
+        sorted_powers = all_powers[idx]
+        
+        # Можно объединить совпадающие частоты, но Spectrum1D этого не требует
+        return Spectrum1D(omega=sorted_freqs, power=sorted_powers)
+
+
+def effective_coupling(
+    ldos: np.ndarray,
+    patch: MaterialPatch,
+    freq_window: tuple[float, float],
+) -> float:
+    """
+    Оценка того, насколько данный участок материала "звучит"
+    в данном частотном окне Среды.
+
+    Идея:
+      - из patch.surface_spectrum() взять Spectrum1D
+      - ограничить его freq_window
+      - умножить интегральную мощность на средний уровень LDOS
+        (например, <ldos> по области интереса)
+    
+    Args:
+        ldos: массив LDOS значений (например, карта или срез).
+        patch: MaterialPatch.
+        freq_window: (w_min, w_max).
+    """
+    spec = patch.surface_spectrum()
+    
+    # Фильтруем спектр патча по окну
+    w_min, w_max = freq_window
+    mask = (spec.omega >= w_min) & (spec.omega <= w_max)
+    
+    if not np.any(mask):
+        return 0.0
+        
+    patch_power = np.sum(spec.power[mask])
+    
+    # Средний LDOS
+    avg_ldos = np.mean(ldos)
+    
+    return float(patch_power * avg_ldos)
+
+def build_material_health_profile(ldos_map: np.ndarray) -> "FeatureSignature":
+    """
+    Строим "здоровый" профиль для материала:
+    - flatten ldos_map
+    - извлекаем статистики (mean, std, PCA и т.д. — см. spectral-health)
+    - получаем компактный вектор health-подписи.
+    
+    Для простоты: вектор = [mean, std, max, min, median]
+    """
+    from .material import FeatureSignature
+    
+    flat = ldos_map.flatten()
+    features = np.array([
+        np.mean(flat),
+        np.std(flat),
+        np.max(flat),
+        np.min(flat),
+        np.median(flat)
+    ])
+    
+    return FeatureSignature(reference_features=features)
 
 
 
@@ -1455,18 +2758,23 @@ class OscillatorChain1D:
         gamma: Damping coefficient (optional, default 0.0).
     """
     n: int
-    k: float
-    m: float
+    k: float | np.ndarray
+    m: float | np.ndarray
     gamma: float = 0.0
     
     def __post_init__(self):
         """Validate parameters."""
         if self.n < 1:
             raise ValueError("Number of oscillators must be >= 1")
-        if self.m <= 0:
+            
+        # Validate mass
+        if np.any(np.asarray(self.m) <= 0):
             raise ValueError("Mass must be positive")
-        if self.k < 0:
+            
+        # Validate stiffness
+        if np.any(np.asarray(self.k) < 0):
             raise ValueError("Stiffness must be non-negative")
+            
         if self.gamma < 0:
             raise ValueError("Damping must be non-negative")
     
@@ -1476,26 +2784,78 @@ class OscillatorChain1D:
         
         Boundary conditions: Fixed ends (both ends are anchored).
         
-        The stiffness matrix K is tridiagonal:
-        - Diagonal: 2*k (force from both neighbors)
-        - Off-diagonal: -k (coupling to neighbor)
+        If k is scalar: uniform stiffness.
+        If k is array: k[i] is stiffness between node i and i+1.
+        Wait, we have N nodes. We have N+1 springs if fixed walls?
+        Or N-1 springs between nodes?
         
-        Returns:
-            Symmetric stiffness matrix of shape (n, n).
+        Let's assume:
+        - If k is scalar: all springs are k (including walls).
+        - If k is array: it must have length N-1 (internal springs) or N+1 (all springs).
+        
+        For LayeredMedium1D, I passed k of length N-1.
+        So let's assume walls have "default" stiffness or same as nearest?
+        
+        Let's standardize:
+        If k is array of length N-1:
+           k[i] connects node i and i+1.
+           Wall-0 connection: use k[0] (or some default?)
+           (N-1)-Wall connection: use k[N-2]
+           
+        Actually, in LayeredMedium1D, I calculate k_springs for N-1 intervals.
+        I didn't specify wall stiffness.
+        
+        Let's assume for now that if k is array (N-1), we use k[0] for left wall and k[-1] for right wall.
         """
-        # Diagonal elements: 2*k for each oscillator
-        diagonal = np.full(self.n, 2.0 * self.k)
+        N = self.n
+        K = np.zeros((N, N))
         
-        # Off-diagonal elements: -k for coupling
-        off_diagonal = np.full(self.n - 1, -self.k)
+        # Helper to get k for interval i (between node i and i+1)
+        # i goes from -1 (left wall) to N-1 (right wall)
         
-        # Build tridiagonal matrix
-        K = (
-            np.diag(diagonal) +
-            np.diag(off_diagonal, k=1) +
-            np.diag(off_diagonal, k=-1)
-        )
+        k_arr = np.asarray(self.k)
+        if k_arr.ndim == 0:
+            # Scalar
+            k_vals = np.full(N + 1, float(k_arr))
+        else:
+            # Array
+            if len(k_arr) == N - 1:
+                # Pad with edge values for walls
+                k_vals = np.zeros(N + 1)
+                k_vals[1:-1] = k_arr
+                k_vals[0] = k_arr[0]
+                k_vals[-1] = k_arr[-1]
+            elif len(k_arr) == N + 1:
+                k_vals = k_arr
+            else:
+                raise ValueError(f"Stiffness array length must be {N-1} or {N+1}")
         
+        # k_vals[i] is spring between node i-1 and i?
+        # Let's say indices 0..N are springs.
+        # Spring 0: Wall -> Node 0
+        # Spring 1: Node 0 -> Node 1
+        # ...
+        # Spring N: Node N-1 -> Wall
+        
+        # Re-map k_vals to this logic
+        # If we had N-1 internal springs (0..N-2), they correspond to indices 1..N-1 in my new list.
+        
+        # Let's build K
+        for i in range(N):
+            # Node i
+            
+            # Spring to left (index i)
+            k_left = k_vals[i]
+            K[i, i] += k_left
+            if i > 0:
+                K[i, i-1] = -k_left
+                
+            # Spring to right (index i+1)
+            k_right = k_vals[i+1]
+            K[i, i] += k_right
+            if i < N - 1:
+                K[i, i+1] = -k_right
+                
         return K
     
     def eigenmodes(self) -> tuple[np.ndarray, np.ndarray]:
@@ -1513,19 +2873,286 @@ class OscillatorChain1D:
             Eigenfrequencies are angular frequencies (rad/s).
             Modes are normalized eigenvectors.
         """
+    def eigenmodes(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Compute eigenfrequencies and eigenmodes of the oscillator chain.
+        
+        Solves the generalized eigenvalue problem: K * v = (omega^2 * M) * v
+        where K is stiffness matrix, M is mass matrix (diagonal).
+        
+        Returns:
+            omega: Array of eigenfrequencies (sorted, >= 0).
+            modes: Matrix of eigenvectors (n, n), each column is a mode.
+        """
         K = self.stiffness_matrix()
         
-        # Solve eigenvalue problem
-        # K * v = lambda * v, where lambda = m * omega^2
-        eigenvalues, eigenvectors = scipy.linalg.eigh(K)
+        # Mass matrix
+        m_arr = np.asarray(self.m)
+        if m_arr.ndim == 0:
+            # Uniform mass
+            M = np.diag(np.full(self.n, float(m_arr)))
+        else:
+            M = np.diag(m_arr)
+            
+        # Solve generalized eigenvalue problem
+        # K * v = lambda * M * v
+        # lambda = omega^2
+        eigenvalues, eigenvectors = scipy.linalg.eigh(K, b=M)
         
         # Convert eigenvalues to frequencies
-        # lambda = m * omega^2 => omega = sqrt(lambda / m)
-        # Clip negative values (numerical noise) to zero
+        # lambda = omega^2 => omega = sqrt(lambda)
         eigenvalues = np.maximum(eigenvalues, 0.0)
-        omega = np.sqrt(eigenvalues / self.m)
+        omega = np.sqrt(eigenvalues)
         
         return omega, eigenvectors
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics\medium_2d.py
+================================================================================
+
+import numpy as np
+import scipy.linalg
+import scipy.sparse
+import scipy.sparse.linalg
+from dataclasses import dataclass
+
+@dataclass
+class OscillatorGrid2D:
+    """
+    2D сетка связанных осцилляторов (игрушечная модель упругой пластины).
+
+    Схема:
+    - каждая точка (i, j) связана с соседями по x и y
+    - возможны разные жёсткости kx, ky
+    - масса в узле одна и та же
+    - Граничные условия: закреплённые края (нулевое смещение за пределами сетки).
+    """
+    nx: int
+    ny: int
+    kx: float
+    ky: float
+    m: float
+    
+    # Optional local parameters (defects)
+    mass_map: np.ndarray | None = None  # (ny, nx)
+    kx_map: np.ndarray | None = None    # (ny, nx) - stiffness to right neighbor?
+    # Let's define: kx_map[i, j] is stiffness between (i,j) and (i,j+1)
+    # ky_map[i, j] is stiffness between (i,j) and (i+1,j)
+    # Or simpler: kx_map[i, j] is "local stiffness coefficient" for node (i,j) in x-direction
+    # Let's stick to the simple model: 
+    # kx_map[i, j] overrides self.kx for connections involving node (i,j).
+    # But connections are shared. Let's say connection (i,j)-(i,j+1) uses average or min?
+    # Simpler: kx_map defines the link to the RIGHT (j+1)
+    # ky_map defines the link to the DOWN (i+1)
+    # This is unambiguous.
+    
+    ky_map: np.ndarray | None = None
+
+    def stiffness_matrix(self) -> np.ndarray:
+        """
+        Собрать матрицу жёсткости размера (nx*ny, nx*ny).
+        Используется 5-точечный шаблон (центр, лево, право, верх, низ).
+        
+        Индексация: k = i * nx + j, где i - строка (0..ny-1), j - столбец (0..nx-1).
+        """
+        N = self.nx * self.ny
+        K = np.zeros((N, N))
+        
+        # Helper to get stiffness
+        def get_kx(i, j):
+            if self.kx_map is not None:
+                return self.kx_map[i, j]
+            return self.kx
+            
+        def get_ky(i, j):
+            if self.ky_map is not None:
+                return self.ky_map[i, j]
+            return self.ky
+        
+        for i in range(self.ny):
+            for j in range(self.nx):
+                k = i * self.nx + j
+                
+                diag_val = 0.0
+                
+                # Link to Right (j+1)
+                if j < self.nx - 1:
+                    kval = get_kx(i, j)
+                    k_right = i * self.nx + (j + 1)
+                    
+                    K[k, k] += kval
+                    K[k_right, k_right] += kval
+                    K[k, k_right] = -kval
+                    K[k_right, k] = -kval
+                else:
+                    # Boundary condition: fixed wall on the right?
+                    # Original code: 
+                    # diag_val += self.kx (always added for left/right)
+                    # If we follow original logic: "spring exists always"
+                    # For right boundary: spring connects to wall.
+                    kval = get_kx(i, j)
+                    K[k, k] += kval
+                    
+                # Link to Left (j-1)
+                # Handled by (j-1)'s link to Right?
+                # No, we iterate all nodes.
+                # Let's be careful not to double count if we iterate all.
+                # Standard assembly: iterate elements (springs) or nodes?
+                # If iterating nodes, we add contribution of all connected springs.
+                pass
+
+        # Re-implementing with clear "spring-based" assembly to avoid confusion
+        K = np.zeros((N, N))
+        
+        # 1. Horizontal springs
+        for i in range(self.ny):
+            for j in range(self.nx):
+                # Spring to the right of (i,j)
+                # Connects (i,j) and (i,j+1) OR (i,j) and Wall
+                
+                k_curr = i * self.nx + j
+                kval = get_kx(i, j)
+                
+                # Add to current node diagonal
+                K[k_curr, k_curr] += kval
+                
+                if j < self.nx - 1:
+                    k_right = i * self.nx + (j + 1)
+                    K[k_right, k_right] += kval
+                    K[k_curr, k_right] = -kval
+                    K[k_right, k_curr] = -kval
+                # If j == nx-1, it connects to wall (displacement 0), so only diagonal term remains.
+                
+                # Wait, what about the spring to the LEFT of (i,0)?
+                # We need a spring there too if boundaries are fixed.
+                # My previous logic: "diag_val += self.kx" implied spring to left and right.
+                # So we need to iterate j from -1 to nx-1?
+                # Let's assume:
+                # Node j has spring to j+1 (defined by kx_map[i,j])
+                # Node j has spring to j-1 (defined by kx_map[i,j-1]?)
+                # Boundary: Wall -> Node 0. Let's say this is defined by kx_map[i, -1] ?? No.
+                
+                # Let's assume kx_map has shape (ny, nx+1) to cover all intervals?
+                # Or just use kx_map for internal links and kx for boundaries?
+                # Or simpler: kx_map[i,j] is the spring to the RIGHT of node j.
+                # And we assume default kx for the spring to the LEFT of node 0.
+                pass
+        
+        # Let's stick to the node-based logic but be consistent.
+        # Node (i,j) is connected to:
+        # Left: (i, j-1). Stiffness? Use get_kx(i, j-1) if j>0. If j=0, use get_kx(i, -1)?
+        # Right: (i, j+1). Stiffness? Use get_kx(i, j).
+        
+        # To make it symmetric and simple:
+        # kx_map[i, j] is the stiffness of the link between (i,j) and (i,j+1).
+        # For boundary springs (Wall-0 and (N-1)-Wall), let's use self.kx (global).
+        
+        K = np.zeros((N, N))
+        
+        for i in range(self.ny):
+            for j in range(self.nx):
+                k_curr = i * self.nx + j
+                
+                # --- Horizontal ---
+                
+                # Link Left: (i, j-1) <-> (i, j)
+                if j == 0:
+                    k_left_val = self.kx # Wall
+                else:
+                    k_left_val = get_kx(i, j-1)
+                    k_left = i * self.nx + (j - 1)
+                    K[k_curr, k_left] = -k_left_val
+                
+                K[k_curr, k_curr] += k_left_val
+                
+                # Link Right: (i, j) <-> (i, j+1)
+                if j == self.nx - 1:
+                    k_right_val = self.kx # Wall
+                else:
+                    k_right_val = get_kx(i, j)
+                    k_right = i * self.nx + (j + 1)
+                    K[k_curr, k_right] = -k_right_val
+                    
+                K[k_curr, k_curr] += k_right_val
+                
+                # --- Vertical ---
+                
+                # Link Up: (i-1, j) <-> (i, j)
+                if i == 0:
+                    k_up_val = self.ky # Wall
+                else:
+                    k_up_val = get_ky(i-1, j)
+                    k_up = (i - 1) * self.nx + j
+                    K[k_curr, k_up] = -k_up_val
+                    
+                K[k_curr, k_curr] += k_up_val
+                
+                # Link Down: (i, j) <-> (i+1, j)
+                if i == self.ny - 1:
+                    k_down_val = self.ky # Wall
+                else:
+                    k_down_val = get_ky(i, j)
+                    k_down = (i + 1) * self.nx + j
+                    K[k_curr, k_down] = -k_down_val
+                    
+                K[k_curr, k_curr] += k_down_val
+                
+        return K
+
+    def eigenmodes(self, n_modes: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Найти собственные частоты и моды.
+        """
+        K = self.stiffness_matrix()
+        
+        # Mass matrix M
+        if self.mass_map is not None:
+            m_vec = self.mass_map.flatten()
+        else:
+            m_vec = np.full(self.nx * self.ny, self.m)
+            
+        # Generalized eigenvalue problem: K v = lambda M v
+        # Since M is diagonal, we can transform to standard EVP:
+        # M^(-1/2) K M^(-1/2) u = lambda u, where v = M^(-1/2) u
+        # Or just use eigh with b argument (if positive definite)
+        
+        # Let's use eigh(K, b=M) if possible, but M is diagonal array.
+        # scipy.linalg.eigh supports b as matrix.
+        M = np.diag(m_vec)
+        
+        if n_modes is not None and n_modes < len(m_vec):
+             eigvals, eigvecs = scipy.linalg.eigh(
+                K, b=M,
+                subset_by_index=(0, n_modes - 1)
+            )
+        else:
+            eigvals, eigvecs = scipy.linalg.eigh(K, b=M)
+            
+        eigvals = np.maximum(eigvals, 0.0)
+        omega = np.sqrt(eigvals) # lambda = omega^2 (mass is already in M)
+        
+        return omega, eigvecs
+        omega = np.sqrt(eigvals / self.m)
+        
+        return omega, eigvecs
+
+    def ldos_map(
+        self,
+        n_modes: int,
+        freq_window: tuple[float, float],
+    ) -> np.ndarray:
+        """
+        Вернуть LDOS-карту формы (ny, nx) в заданном частотном окне.
+        Использует eigenmodes(...) + ldos_from_modes(...).
+        """
+        from .ldos import ldos_from_modes
+        
+        omega, modes = self.eigenmodes(n_modes=n_modes)
+        ldos_flat = ldos_from_modes(modes, omega, freq_window)
+        
+        return ldos_flat.reshape((self.ny, self.nx))
 
 
 
@@ -1899,6 +3526,142 @@ def timeseries_to_spectrum(
 
 
 ================================================================================
+ФАЙЛ: src\spectral_physics_lab.egg-info\dependency_links.txt
+================================================================================
+
+
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics_lab.egg-info\entry_points.txt
+================================================================================
+
+[console_scripts]
+spectral-health = spectral_physics.cli:main
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics_lab.egg-info\requires.txt
+================================================================================
+
+numpy>=1.25
+scipy>=1.11
+matplotlib>=3.7
+pyyaml>=6.0
+
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics_lab.egg-info\SOURCES.txt
+================================================================================
+
+README.md
+pyproject.toml
+src/spectral_physics/__init__.py
+src/spectral_physics/atoms.py
+src/spectral_physics/cli.py
+src/spectral_physics/diagnostics.py
+src/spectral_physics/geophysics_1d.py
+src/spectral_physics/grav_toy.py
+src/spectral_physics/io.py
+src/spectral_physics/ldos.py
+src/spectral_physics/material.py
+src/spectral_physics/materials.py
+src/spectral_physics/medium_1d.py
+src/spectral_physics/medium_2d.py
+src/spectral_physics/report.py
+src/spectral_physics/root_finding.py
+src/spectral_physics/spectrum.py
+src/spectral_physics/timeseries.py
+src/spectral_physics_lab.egg-info/PKG-INFO
+src/spectral_physics_lab.egg-info/SOURCES.txt
+src/spectral_physics_lab.egg-info/dependency_links.txt
+src/spectral_physics_lab.egg-info/entry_points.txt
+src/spectral_physics_lab.egg-info/requires.txt
+src/spectral_physics_lab.egg-info/top_level.txt
+tests/test_atoms.py
+tests/test_diagnostics.py
+tests/test_diagnostics_features.py
+tests/test_geophysics_1d.py
+tests/test_grav_toy.py
+tests/test_io.py
+tests/test_ldos.py
+tests/test_material.py
+tests/test_material_features.py
+tests/test_materials.py
+tests/test_medium_1d.py
+tests/test_medium_2d.py
+tests/test_report.py
+tests/test_root_finding.py
+tests/test_spectrum.py
+tests/test_timeseries.py
+
+
+================================================================================
+ФАЙЛ: src\spectral_physics_lab.egg-info\top_level.txt
+================================================================================
+
+spectral_physics
+
+
+
+================================================================================
+ФАЙЛ: tests\test_atoms.py
+================================================================================
+
+import pytest
+import numpy as np
+from spectral_physics.atoms import (
+    AtomicResonator, 
+    spectral_overlap, 
+    can_form_bond,
+    H, O, C
+)
+
+def test_atomic_resonator_creation():
+    atom = AtomicResonator.from_lines("Test", [(10.0, 1.0), (20.0, 0.5)], max_bonds=3)
+    assert len(atom.omega) == 2
+    assert atom.max_bonds == 3
+    assert atom.name == "Test"
+    
+    spec = atom.spectrum()
+    assert np.allclose(spec.omega, [10.0, 20.0])
+
+def test_spectral_overlap_identical():
+    # H vs H should have overlap
+    # H has line at 1.0
+    score = spectral_overlap(H, H, freq_tol=0.1)
+    # Both normalized power is 1.0. Min(1,1) = 1.
+    assert score > 0.9
+
+def test_spectral_overlap_none():
+    # Atom with far frequency
+    X = AtomicResonator.from_lines("X", [(100.0, 1.0)], max_bonds=1)
+    
+    score = spectral_overlap(H, X, freq_tol=0.1)
+    assert score == 0.0
+
+def test_can_form_bond_logic():
+    # H and O should bond (H=1.0, O has 1.0)
+    assert can_form_bond(H, O, freq_tol=0.1, threshold=0.1)
+    
+    # Inert gas (He)
+    He = AtomicResonator.from_lines("He", [(1.0, 1.0)], max_bonds=0)
+    
+    # Even if frequencies match, max_bonds=0 prevents bonding
+    assert not can_form_bond(He, H, freq_tol=0.1, threshold=0.1)
+
+def test_carbon_bonds():
+    # C should bond with H
+    assert can_form_bond(C, H, freq_tol=0.1, threshold=0.1)
+    # C should bond with O
+    assert can_form_bond(C, O, freq_tol=0.1, threshold=0.1)
+
+
+
+================================================================================
 ФАЙЛ: tests\test_diagnostics.py
 ================================================================================
 
@@ -2151,6 +3914,159 @@ def test_spectral_entropy():
     assert abs(h_peaked) < 1e-10
 
 
+def test_extract_features():
+    """Test feature extraction."""
+    from spectral_physics.diagnostics import extract_features
+    
+    # 10 Hz (power 1.0) and 100 Hz (power 2.0)
+    omega = np.array([2*np.pi*10, 2*np.pi*100])
+    power = np.array([1.0, 2.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    bands = [(5, 15), (90, 110)]
+    
+    features = extract_features(spec, bands)
+    
+    assert len(features) == 3  # 2 bands + 1 entropy
+    assert abs(features[0] - 1.0) < 1e-10
+    assert abs(features[1] - 2.0) < 1e-10
+    # Entropy should be > 0 for 2 peaks
+    assert features[2] > 0
+
+
+
+
+
+
+================================================================================
+ФАЙЛ: tests\test_diagnostics_features.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.spectrum import Spectrum1D
+from spectral_physics.diagnostics import extract_features, spectral_band_power, spectral_entropy
+
+def test_extract_features_structure():
+    # Create a dummy spectrum
+    omega = np.linspace(0, 100, 101)
+    power = np.ones_like(omega)
+    spec = Spectrum1D(omega, power)
+    
+    bands = [(0, 10), (10, 50)]
+    features = extract_features(spec, bands)
+    
+    # Expect len(bands) + 1 (entropy)
+    assert len(features) == 3
+    assert isinstance(features, np.ndarray)
+
+def test_spectral_band_power():
+    # Spectrum with power 1.0 everywhere
+    # omega is 0..100 rad/s -> freq is 0..100/(2pi) ~ 15.9 Hz
+    # Let's use Hz directly for clarity in construction if possible, 
+    # but Spectrum1D takes omega.
+    
+    # Let's make a simple discrete spectrum
+    # 1 Hz = 2pi rad/s
+    freq_hz = np.array([1.0, 2.0, 3.0])
+    omega = freq_hz * 2 * np.pi
+    power = np.array([10.0, 20.0, 30.0])
+    
+    spec = Spectrum1D(omega, power)
+    
+    # Band 0.5-1.5 Hz should capture 1.0 Hz (power 10)
+    p1 = spectral_band_power(spec, 0.5, 1.5)
+    assert p1 == 10.0
+    
+    # Band 1.5-2.5 Hz should capture 2.0 Hz (power 20)
+    p2 = spectral_band_power(spec, 1.5, 2.5)
+    assert p2 == 20.0
+    
+    # Band 0-10 Hz should capture all (60)
+    p_all = spectral_band_power(spec, 0.0, 10.0)
+    assert p_all == 60.0
+
+def test_spectral_entropy():
+    # 1. Flat spectrum (max entropy)
+    omega = np.array([1, 2, 3, 4])
+    power = np.array([1, 1, 1, 1]) # Normalized: 0.25 each
+    spec = Spectrum1D(omega, power)
+    
+    # H = - sum(0.25 * ln(0.25)) * 4 = - ln(0.25) = ln(4)
+    expected = np.log(4)
+    assert np.isclose(spectral_entropy(spec), expected)
+    
+    # 2. Delta function (min entropy)
+    power2 = np.array([1, 0, 0, 0])
+    spec2 = Spectrum1D(omega, power2)
+    # H = - (1*ln(1) + 0) = 0
+    assert spectral_entropy(spec2) == 0.0
+
+
+
+================================================================================
+ФАЙЛ: tests\test_geophysics_1d.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.geophysics_1d import (
+    Layer, LayeredMedium1D, simulate_pulse_response, invert_single_layer_thickness
+)
+
+def test_layered_medium_creation():
+    l1 = Layer(thickness=10.0, density=1.0, stiffness=1.0)
+    l2 = Layer(thickness=10.0, density=2.0, stiffness=4.0)
+    medium = LayeredMedium1D(layers=[l1, l2], dx=1.0)
+    
+    chain = medium.to_oscillator_chain()
+    
+    # Total depth 20, dx=1 -> 20 nodes
+    assert chain.n == 20
+    
+    # First 10 nodes (0..9) should have mass ~ 1.0 * 1.0 = 1.0
+    assert np.allclose(chain.m[:10], 1.0)
+    
+    # Next 10 nodes (10..19) should have mass ~ 2.0 * 1.0 = 2.0
+    assert np.allclose(chain.m[10:], 2.0)
+
+def test_simulation_runs():
+    l1 = Layer(thickness=5.0, density=1.0, stiffness=1.0)
+    medium = LayeredMedium1D(layers=[l1], dx=1.0)
+    
+    t, sig = simulate_pulse_response(medium, t_max=10.0, dt=0.1)
+    
+    assert len(t) == 100
+    assert len(sig) == 100
+    # Signal should not be all zeros (pulse happened)
+    assert np.max(np.abs(sig)) > 0
+
+def test_inversion_sanity():
+    # Create target
+    true_h = 5.0
+    l1 = Layer(thickness=true_h, density=1.0, stiffness=1.0)
+    l_sub = Layer(thickness=10.0, density=10.0, stiffness=10.0) # Hard substrate
+    
+    medium = LayeredMedium1D(layers=[l1, l_sub], dx=1.0)
+    t_max = 20.0
+    dt = 0.1
+    t, target_sig = simulate_pulse_response(medium, t_max, dt)
+    
+    # Invert
+    # Start guess 4.0
+    h_found = invert_single_layer_thickness(
+        target_sig, t, 
+        density=1.0, stiffness=1.0, 
+        thickness_guess=4.0,
+        fixed_layers_below=[l_sub],
+        dx=1.0
+    )
+    
+    # Should be close to 5.0
+    # Note: dx=1.0 makes resolution limited. 5.0 is exactly 5 nodes.
+    # 4.0 is 4 nodes.
+    # The optimizer should find 5.0 (or close to it if continuous interpretation)
+    assert abs(h_found - true_h) < 1.5 # Tolerance due to dx discretization
 
 
 
@@ -2437,6 +4353,50 @@ def test_save_load_health_profile_roundtrip():
 
 
 ================================================================================
+ФАЙЛ: tests\test_ldos.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.ldos import ldos_from_modes
+from spectral_physics.medium_2d import OscillatorGrid2D
+
+def test_ldos_empty_window():
+    # 3 points, 2 modes
+    modes = np.array([[1, 0], [0, 1], [1, 1]])
+    omegas = np.array([1.0, 2.0])
+    
+    # Window that captures nothing
+    ldos = ldos_from_modes(modes, omegas, (3.0, 4.0))
+    
+    assert np.all(ldos == 0)
+
+def test_ldos_full_window():
+    # 2 points, 2 modes
+    # Mode 0: [1, 0] at w=1
+    # Mode 1: [0, 1] at w=2
+    modes = np.array([[1.0, 0.0], [0.0, 1.0]])
+    omegas = np.array([1.0, 2.0])
+    
+    # Capture both
+    ldos = ldos_from_modes(modes, omegas, (0.0, 3.0))
+    
+    # Point 0: 1^2 + 0^2 = 1
+    # Point 1: 0^2 + 1^2 = 1
+    assert np.allclose(ldos, [1.0, 1.0])
+
+def test_grid_ldos_map_shape():
+    grid = OscillatorGrid2D(nx=5, ny=5, kx=1.0, ky=1.0, m=1.0)
+    
+    # Calculate LDOS
+    ldos_map = grid.ldos_map(n_modes=10, freq_window=(0.0, 10.0))
+    
+    assert ldos_map.shape == (5, 5)
+    assert np.all(ldos_map >= 0)
+
+
+
+================================================================================
 ФАЙЛ: tests\test_material.py
 ================================================================================
 
@@ -2633,6 +4593,178 @@ def test_distance_cosine_orthogonal():
     assert abs(dist - 1.0) < 1e-10
 
 
+def test_feature_signature_basic():
+    """Test FeatureSignature distance."""
+    from spectral_physics.material import FeatureSignature
+    
+    ref = np.array([1.0, 2.0, 3.0])
+    sig = FeatureSignature(reference_features=ref)
+    
+    # Identical
+    assert abs(sig.distance_l2(ref)) < 1e-10
+    
+    # Offset
+    other = np.array([2.0, 2.0, 3.0]) # diff is [1, 0, 0]
+    assert abs(sig.distance_l2(other) - 1.0) < 1e-10
+
+
+def test_health_profile_score_features():
+    """Test HealthProfile feature scoring."""
+    from spectral_physics.material import HealthProfile, FeatureSignature, MaterialSignature
+    from spectral_physics.diagnostics import extract_features
+    
+    # Setup dummy data
+    omega = np.array([2*np.pi*10])
+    power = np.array([1.0])
+    spec = Spectrum1D(omega=omega, power=power)
+    
+    # Features for this spec: band_power(1.0) + entropy(0.0) = [1.0, 0.0]
+    bands = [(5, 15)]
+    feats = extract_features(spec, bands)
+    
+    feat_sig = FeatureSignature(reference_features=feats)
+    mat_sig = MaterialSignature(reference=spec)
+    
+    profile = HealthProfile(
+        signatures={"ch1": mat_sig},
+        feature_signatures={"ch1": feat_sig}
+    )
+    
+    # Score against itself should be 0
+    scores = profile.score_features(
+        {"ch1": spec},
+        {"ch1": bands}
+    )
+    
+    assert "ch1" in scores
+    assert scores["ch1"] < 1e-10
+
+
+
+
+
+
+================================================================================
+ФАЙЛ: tests\test_material_features.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.spectrum import Spectrum1D
+from spectral_physics.material import FeatureSignature, HealthProfile, MaterialSignature
+
+def test_feature_signature_distance():
+    ref_feats = np.array([1.0, 2.0, 3.0])
+    sig = FeatureSignature(reference_features=ref_feats)
+    
+    # Identical
+    assert sig.distance_l2(ref_feats) == 0.0
+    
+    # Different
+    other = np.array([2.0, 2.0, 3.0]) # diff 1.0 in first component
+    assert sig.distance_l2(other) == 1.0
+    
+    # Shape mismatch
+    with pytest.raises(ValueError):
+        sig.distance_l2(np.array([1.0, 2.0]))
+
+def test_health_profile_score_features(monkeypatch):
+    # Mock extract_features to return predictable values
+    import spectral_physics.material as mat
+    
+    # We need to mock it where it is imported inside the method or globally?
+    # The method does: from .diagnostics import extract_features
+    # So we need to mock spectral_physics.diagnostics.extract_features
+    
+    # But since it's a local import inside the function, mocking might be tricky if we don't patch the module.
+    # Let's just use real objects, it's safer.
+    
+    # Setup
+    omega = np.linspace(0, 10, 11)
+    power = np.ones_like(omega)
+    spec = Spectrum1D(omega, power)
+    
+    # Create profile with feature signature
+    # Assume extract_features returns [band1, entropy] -> length 2 for 1 band
+    # For power=1 everywhere, band power depends on width.
+    # Let's just create a dummy FeatureSignature that matches what we expect from "healthy"
+    
+    # Let's compute expected features for "healthy"
+    # Band 0-10 (all points? freq_hz = omega/2pi)
+    # omega=10 -> freq ~ 1.59 Hz.
+    # Band 0-2 Hz covers everything.
+    # Power sum = 11.
+    # Entropy = ln(11).
+    
+    bands = {'ch1': [(0.0, 2.0)]}
+    
+    # "Healthy" features
+    feat_ref = np.array([11.0, np.log(11)])
+    
+    feat_sig = FeatureSignature(reference_features=feat_ref)
+    
+    profile = HealthProfile(
+        signatures={'ch1': MaterialSignature(reference=spec)},
+        feature_signatures={'ch1': feat_sig}
+    )
+    
+    # 1. Test with identical spectrum
+    scores = profile.score_features({'ch1': spec}, bands)
+    assert 'ch1' in scores
+    assert np.isclose(scores['ch1'], 0.0)
+    
+    # 2. Test with modified spectrum
+    # Double the power -> band power doubles (22), entropy stays same (normalized)
+    spec2 = Spectrum1D(omega, power * 2)
+    scores2 = profile.score_features({'ch1': spec2}, bands)
+    
+    # Diff: band power 22 vs 11 -> diff 11. Entropy same.
+    # Distance = sqrt(11^2 + 0) = 11.
+    assert np.isclose(scores2['ch1'], 11.0)
+
+
+
+================================================================================
+ФАЙЛ: tests\test_materials.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.materials import MaterialPatch, effective_coupling
+from spectral_physics.atoms import AtomicResonator
+
+def test_material_patch_spectrum():
+    # Atom A: line at 1.0, power 1.0
+    A = AtomicResonator.from_lines("A", [(1.0, 1.0)], max_bonds=1)
+    # Atom B: line at 2.0, power 1.0
+    B = AtomicResonator.from_lines("B", [(2.0, 1.0)], max_bonds=1)
+    
+    # Mix 50/50
+    patch = MaterialPatch(atoms=[A, B], weights=np.array([0.5, 0.5]))
+    
+    spec = patch.surface_spectrum()
+    
+    assert len(spec.omega) == 2
+    assert np.allclose(spec.omega, [1.0, 2.0])
+    assert np.allclose(spec.power, [0.5, 0.5])
+
+def test_effective_coupling():
+    # Atom A: line at 1.0, power 1.0
+    A = AtomicResonator.from_lines("A", [(1.0, 1.0)], max_bonds=1)
+    patch = MaterialPatch(atoms=[A], weights=np.array([1.0]))
+    
+    # LDOS is constant 2.0
+    ldos = np.array([2.0, 2.0, 2.0])
+    
+    # Window covers the line
+    coupling = effective_coupling(ldos, patch, freq_window=(0.5, 1.5))
+    
+    # Power = 1.0. Avg LDOS = 2.0. Result = 2.0
+    assert coupling == 2.0
+    
+    # Window does NOT cover the line
+    coupling_zero = effective_coupling(ldos, patch, freq_window=(2.0, 3.0))
+    assert coupling_zero == 0.0
 
 
 
@@ -2768,6 +4900,74 @@ def test_different_parameters():
     
     # Heavier chain should have lower frequencies
     assert np.all(omega3 < omega1)
+
+
+
+================================================================================
+ФАЙЛ: tests\test_medium_2d.py
+================================================================================
+
+import numpy as np
+import pytest
+from spectral_physics.medium_2d import OscillatorGrid2D
+
+def test_grid_2x2_stiffness():
+    # 2x2 grid
+    # Indices:
+    # 0 1
+    # 2 3
+    #
+    # Neighbors:
+    # 0: 1(x), 2(y) + walls
+    # 1: 0(x), 3(y) + walls
+    # ...
+    
+    grid = OscillatorGrid2D(nx=2, ny=2, kx=1.0, ky=2.0, m=1.0)
+    K = grid.stiffness_matrix()
+    
+    assert K.shape == (4, 4)
+    
+    # Check symmetry
+    assert np.allclose(K, K.T)
+    
+    # Check diagonal elements
+    # Each node has 2 neighbors in x (one might be wall) and 2 in y (one might be wall)
+    # With fixed boundaries, every node is connected to 2 neighbors in X (k=1) and 2 in Y (k=2)
+    # Total stiffness = 2*kx + 2*ky = 2*1 + 2*2 = 6
+    expected_diag = 6.0
+    assert np.allclose(np.diag(K), expected_diag)
+    
+    # Check off-diagonals
+    # 0-1 (horizontal): -kx = -1
+    assert K[0, 1] == -1.0
+    # 0-2 (vertical): -ky = -2
+    assert K[0, 2] == -2.0
+    # 0-3 (diagonal): 0
+    assert K[0, 3] == 0.0
+
+def test_eigenmodes_positive():
+    grid = OscillatorGrid2D(nx=3, ny=3, kx=1.0, ky=1.0, m=1.0)
+    omega, modes = grid.eigenmodes()
+    
+    assert len(omega) == 9
+    assert modes.shape == (9, 9)
+    
+    # Frequencies should be positive (stable system)
+    assert np.all(omega >= 0)
+    
+    # First mode should be > 0 (no zero modes for fixed boundaries)
+    assert omega[0] > 0
+
+def test_eigenmodes_subset():
+    grid = OscillatorGrid2D(nx=5, ny=5, kx=1.0, ky=1.0, m=1.0)
+    n_modes = 5
+    omega, modes = grid.eigenmodes(n_modes=n_modes)
+    
+    assert len(omega) == n_modes
+    assert modes.shape == (25, n_modes)
+    
+    # Check sorted
+    assert np.all(np.diff(omega) >= 0)
 
 
 

@@ -161,3 +161,51 @@ def load_health_profile(path: str) -> "HealthProfile":
         
     return HealthProfile(signatures=signatures)
 
+
+def save_ndt_profile(profile, path: str) -> None:
+    """
+    Save NDTProfile to .npz.
+    
+    Args:
+        profile: NDTProfile instance.
+        path: Path to .npz file.
+    """
+    np.savez(
+        path,
+        freq_window=np.array(profile.freq_window),
+        ldos_mean=profile.ldos_mean,
+        ldos_std=profile.ldos_std
+    )
+
+
+def load_ndt_profile(path: str):
+    """
+    Load NDTProfile from .npz.
+    
+    Args:
+        path: Path to .npz file.
+        
+    Returns:
+        NDTProfile instance.
+    """
+    from .ndt import NDTProfile
+    
+    path_obj = Path(path)
+    if not path_obj.exists():
+        raise ValueError(f"File not found: {path}")
+        
+    try:
+        data = np.load(path)
+    except Exception as e:
+        raise ValueError(f"Failed to load .npz file {path}: {e}")
+        
+    if 'freq_window' not in data or 'ldos_mean' not in data:
+        raise ValueError(f"File {path} is not a valid NDTProfile")
+        
+    return NDTProfile(
+        freq_window=tuple(data['freq_window']),
+        ldos_mean=data['ldos_mean'],
+        ldos_std=data['ldos_std']
+    )
+
+

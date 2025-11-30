@@ -99,3 +99,121 @@ def build_material_health_profile(ldos_map: np.ndarray) -> "FeatureSignature":
     ])
     
     return FeatureSignature(reference_features=features)
+
+
+@dataclass
+class MoleculeGraph:
+    """
+    Graph representation of a molecule.
+    Nodes are AtomicResonators, Edges are bonds.
+    """
+    atoms: list[AtomicResonator]
+    bonds: list[tuple[int, int, str]] # (atom_idx1, atom_idx2, bond_type)
+    
+    def combined_valence_spectrum(self) -> Spectrum1D:
+        """
+        Compute the spectrum of the molecule based on its atoms and bonds.
+        Simple model: sum of atomic spectra, perhaps modified by bonds.
+        """
+        all_freqs = []
+        all_powers = []
+        
+        # Base atomic spectra
+        for atom in self.atoms:
+            spec = atom.spectrum()
+            all_freqs.extend(spec.omega)
+            all_powers.extend(spec.power)
+            
+        # Bond effects (toy model):
+        # Bonds might shift frequencies or add new modes.
+        # Here we just add a "bond mode" for each bond
+        for idx1, idx2, btype in self.bonds:
+            # Bond frequency depends on bond type
+            if btype == 'single':
+                freq = 1.0
+            elif btype == 'double':
+                freq = 1.5
+            else:
+                freq = 0.5
+                
+            all_freqs.append(freq)
+            all_powers.append(0.5) # Arbitrary bond strength
+            
+        return Spectrum1D(
+            omega=np.array(all_freqs),
+            power=np.array(all_powers)
+        )
+
+@dataclass
+class CandidateMaterial:
+    name: str
+    confidence: float
+    predicted_properties: dict
+
+def infer_material_from_ldos(
+    ldos_map: np.ndarray,
+    atom_db: dict[str, AtomicResonator]
+) -> list[CandidateMaterial]:
+    """
+    Infer potential material composition from LDOS map features.
+    
+    This is a 'toy' inference engine.
+    Real logic would involve matching spectral peaks to atomic/molecular signatures.
+    """
+    # Extract features from LDOS
+    mean_val = np.mean(ldos_map)
+    std_val = np.std(ldos_map)
+    
+    candidates = []
+    
+    # Toy logic:
+    # High mean -> Light atoms (H, C) - higher activity?
+    # Low mean -> Heavy atoms (Fe) - lower activity?
+    
+    # Check against known "materials" (hardcoded for demo)
+    
+    # 1. "Steel" (Iron-based)
+    # Expect low mean (heavy), specific variance
+    score_steel = 0.0
+    if mean_val < 0.05:
+        score_steel += 0.8
+    elif mean_val < 0.1:
+        score_steel += 0.4
+        
+    candidates.append(CandidateMaterial(
+        name="Steel (Fe-C)",
+        confidence=score_steel,
+        predicted_properties={"density": "high", "stiffness": "high"}
+    ))
+    
+    # 2. "Water" (H2O)
+    # Expect high mean (light atoms), high variance
+    score_water = 0.0
+    if mean_val > 0.1:
+        score_water += 0.7
+    if std_val > 0.02:
+        score_water += 0.2
+        
+    candidates.append(CandidateMaterial(
+        name="Water (H2O)",
+        confidence=score_water,
+        predicted_properties={"density": "low", "stiffness": "low"}
+    ))
+    
+    # 3. "Concrete" (Si-O based)
+    # Medium mean
+    score_concrete = 0.0
+    if 0.05 <= mean_val <= 0.15:
+        score_concrete += 0.6
+        
+    candidates.append(CandidateMaterial(
+        name="Concrete (Si-O)",
+        confidence=score_concrete,
+        predicted_properties={"density": "medium", "stiffness": "high"}
+    ))
+    
+    # Sort by confidence
+    candidates.sort(key=lambda x: x.confidence, reverse=True)
+    
+    return candidates
+
